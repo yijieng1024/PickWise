@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'login_page.dart'; // Ensure this file exists and contains LoginPage class
+import 'signup_page.dart';
 
 class WelcomeScreen extends StatelessWidget {
-  const WelcomeScreen({Key? key}) : super(key: key);
+  const WelcomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -13,37 +15,46 @@ class WelcomeScreen extends StatelessWidget {
           child: Column(
             children: [
               // Top spacing
-              const SizedBox(height: 80),
+              const SizedBox(height: 50),
               
               // Logo section
-              Container(
-                width: 120,
-                height: 120,
+              SizedBox(
                 child: Image.asset(
-                  'assets/images/pickwise_logo_middle_rmbg.png', // Replace with your PNG file path
+                  'assets/images/pickwise_logo_middle_rmbg.png',
                   width: 120,
                   height: 120,
                   fit: BoxFit.contain, // Maintains aspect ratio
                 )
               ),
               
-              const SizedBox(height: 24),
+              // const SizedBox(height: 5),
               
               // App name
               RichText(
                 text: const TextSpan(
                   children: [
                     TextSpan(
-                      text: 'Pick',
+                      text: 'P',
                       style: TextStyle(
+                        fontFamily: 'Poppins',
                         fontSize: 36,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF4CAF50),
                       ),
                     ),
                     TextSpan(
+                      text: 'ick',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF37474F),
+                      ),
+                    ),
+                    TextSpan(
                       text: 'W',
                       style: TextStyle(
+                        fontFamily: 'Poppins',
                         fontSize: 36,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF2196F3),
@@ -52,6 +63,7 @@ class WelcomeScreen extends StatelessWidget {
                     TextSpan(
                       text: 'ise',
                       style: TextStyle(
+                        fontFamily: 'Poppins',
                         fontSize: 36,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF37474F),
@@ -75,11 +87,11 @@ class WelcomeScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               
-              const SizedBox(height: 16),
+              // const SizedBox(height: 1),
               
               // Subtitle
               const Text(
-                'Your smart assistant to choosing computer.',
+                'Your smart assistant to choosing Laptop.',
                 style: TextStyle(
                   fontSize: 16,
                   color: Color(0xFF5F6368),
@@ -95,10 +107,13 @@ class WelcomeScreen extends StatelessWidget {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // Handle get started action
-                    print('Get Started pressed');
-                  },
+                onPressed: () {
+                  // Navigate to Sign Up screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => SignUpPage()),
+                  );
+                },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFFD54F), // Yellow color
                     foregroundColor: const Color(0xFF37474F),
@@ -122,8 +137,11 @@ class WelcomeScreen extends StatelessWidget {
               // Login link
               TextButton(
                 onPressed: () {
-                  // Handle login action
-                  print('Log In pressed');
+                  // Navigate to login screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => LoginPage()),
+                  );
                 },
                 child: const Text(
                   'Already have an account? Log In',
@@ -161,11 +179,14 @@ void main() {
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'PickWise',
       theme: ThemeData(
+        fontFamily: 'Poppins',
         primarySwatch: Colors.teal,
       ),
       home: const WelcomeScreen(),
