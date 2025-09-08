@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1058220948252",
+    "project_id": "pickwise-cb4d9",
+    "storage_bucket": "pickwise-cb4d9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1058220948252:android:dc57ad7b1e0b5fe49ed8d9",
+        "android_client_info": {
+          "package_name": "com.example.pickwise"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBbY6HE3hni_HpNEW1OdUK2GNenne_tpNs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

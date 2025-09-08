@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'signup_page.dart';
+import 'home_page.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({Key? key}) : super(key: key);
+  const LoginPage({super.key});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -11,6 +14,28 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  Future<void> _loginUser() async {
+    try {
+      await _auth.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Login successful")),
+      );
+      // TODO: Navigate to dashboard/home page
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HomePage()),
+      );
+    } on FirebaseAuthException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message ?? "Login failed")),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,8 +48,8 @@ class _LoginPageState extends State<LoginPage> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF81C784), // Light green at top
-              Color(0xFF4DD0E1), // Cyan in middle
+              Color(0xFF81C784),
+              Color(0xFF4DD0E1),
             ],
           ),
         ),
@@ -35,8 +60,6 @@ class _LoginPageState extends State<LoginPage> {
               child: Column(
                 children: [
                   const SizedBox(height: 60),
-                  
-                  // Login form card
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(32.0),
@@ -53,19 +76,13 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     child: Column(
                       children: [
-                        // Logo
-                        Container(
-                          child: Image.asset(
-                            'assets/images/pickwise_logo_middle_rmbg.png',
-                            width: 120,
-                            height: 120,
-                            fit: BoxFit.contain, // Maintains aspect ratio
-                          )
+                        Image.asset(
+                          'assets/images/pickwise_logo_middle_rmbg.png',
+                          width: 120,
+                          height: 120,
+                          fit: BoxFit.contain,
                         ),
-                        
                         const SizedBox(height: 24),
-                        
-                        // Title
                         const Text(
                           'Log in to PickWise',
                           style: TextStyle(
@@ -74,119 +91,43 @@ class _LoginPageState extends State<LoginPage> {
                             color: Color(0xFF37474F),
                           ),
                         ),
-                        
                         const SizedBox(height: 32),
-                        
-                        // Email field
-                        Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF5F5F5),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: const Color(0xFFE0E0E0),
-                            ),
-                          ),
-                          child: TextField(
-                            controller: _emailController,
-                            decoration: const InputDecoration(
-                              prefixIcon: Icon(
-                                Icons.email_outlined,
-                                color: Color(0xFF757575),
-                              ),
-                              hintText: 'Email Address',
-                              hintStyle: TextStyle(
-                                color: Color(0xFF9E9E9E),
-                                fontSize: 16,
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 16,
-                              ),
-                            ),
-                            keyboardType: TextInputType.emailAddress,
-                          ),
+                        _buildTextField(
+                          controller: _emailController,
+                          icon: Icons.email_outlined,
+                          hint: 'Email Address',
+                          obscure: false,
                         ),
-                        
                         const SizedBox(height: 16),
-                        
-                        // Password field
-                        Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF5F5F5),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: const Color(0xFFE0E0E0),
-                            ),
-                          ),
-                          child: TextField(
-                            controller: _passwordController,
-                            obscureText: _obscurePassword,
-                            decoration: InputDecoration(
-                              prefixIcon: const Icon(
-                                Icons.lock_outline,
-                                color: Color(0xFF757575),
-                              ),
-                              suffixIcon: IconButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _obscurePassword = !_obscurePassword;
-                                  });
-                                },
-                                icon: Icon(
-                                  _obscurePassword 
-                                    ? Icons.visibility_outlined 
-                                    : Icons.visibility_off_outlined,
-                                  color: const Color(0xFF757575),
-                                ),
-                              ),
-                              hintText: 'Password',
-                              hintStyle: const TextStyle(
-                                color: Color(0xFF9E9E9E),
-                                fontSize: 16,
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 16,
-                              ),
-                            ),
-                          ),
+                        _buildTextField(
+                          controller: _passwordController,
+                          icon: Icons.lock_outline,
+                          hint: 'Password',
+                          obscure: _obscurePassword,
+                          toggle: () {
+                            setState(() {
+                              _obscurePassword = !_obscurePassword;
+                            });
+                          },
                         ),
-                        
                         const SizedBox(height: 16),
-                        
-                        // Forgot password link
-                        Center(
-                          child: TextButton(
-                            onPressed: () {
-                              // Handle forgot password
-                              print('Forgot password pressed');
-                            },
-                            child: const Text(
-                              'Forgot Password?',
-                              style: TextStyle(
-                                color: Color(0xFF37474F),
-                                fontSize: 14,
-                                decoration: TextDecoration.underline,
-                              ),
+                        TextButton(
+                          onPressed: () {},
+                          child: const Text(
+                            'Forgot Password?',
+                            style: TextStyle(
+                              color: Color(0xFF37474F),
+                              fontSize: 14,
+                              decoration: TextDecoration.underline,
                             ),
                           ),
                         ),
-                        
                         const SizedBox(height: 24),
-                        
-                        // Log In button
                         SizedBox(
                           width: double.infinity,
                           height: 56,
                           child: ElevatedButton(
-                            onPressed: () {
-                              // Handle login
-                              print('Login pressed');
-                              print('Email: ${_emailController.text}');
-                              print('Password: ${_passwordController.text}');
-                            },
+                            onPressed: _loginUser,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFFFD54F),
                               foregroundColor: const Color(0xFF37474F),
@@ -204,102 +145,15 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                           ),
                         ),
-                        
-                        const SizedBox(height: 32),
-                        
-                        // OR divider
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Container(
-                                height: 1,
-                                color: const Color(0xFFBDBDBD),
-                              ),
-                            ),
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 16),
-                              child: Text(
-                                'OR',
-                                style: TextStyle(
-                                  color: Color(0xFF757575),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Container(
-                                height: 1,
-                                color: const Color(0xFFBDBDBD),
-                              ),
-                            ),
-                          ],
-                        ),
-                        
                         const SizedBox(height: 24),
-                        
-                        // Continue with Google button
-                        SizedBox(
-                          width: double.infinity,
-                          height: 56,
-                          child: ElevatedButton(
-                            onPressed: () {
-                              // Handle Google login
-                              print('Google login pressed');
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: const Color(0xFF37474F),
-                              elevation: 0,
-                              side: const BorderSide(
-                                color: Color(0xFFE0E0E0),
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                // Google icon (using a colored container as placeholder)
-                                Container(
-                                  width: 20,
-                                  height: 20,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF4285F4),
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                  child: const Center(
-                                    child: Text(
-                                      'G',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                const Text(
-                                  'Continue with Google',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        
-                        const SizedBox(height: 24),
-                        
-                        // Sign up link
                         TextButton(
                           onPressed: () {
-                            // Handle sign up
-                            print('Sign up pressed');
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SignUpPage(),
+                              ),
+                            );
                           },
                           child: RichText(
                             text: const TextSpan(
@@ -327,10 +181,7 @@ class _LoginPageState extends State<LoginPage> {
                       ],
                     ),
                   ),
-                  
                   const SizedBox(height: 60),
-                  
-                  // Copyright
                   const Text(
                     '© 2025 PickWise',
                     style: TextStyle(
@@ -338,12 +189,47 @@ class _LoginPageState extends State<LoginPage> {
                       color: Colors.white70,
                     ),
                   ),
-                  
                   const SizedBox(height: 24),
                 ],
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required IconData icon,
+    required String hint,
+    required bool obscure,
+    VoidCallback? toggle,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F5F5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+      ),
+      child: TextField(
+        controller: controller,
+        obscureText: obscure,
+        decoration: InputDecoration(
+          prefixIcon: Icon(icon, color: const Color(0xFF757575)),
+          suffixIcon: toggle != null
+              ? IconButton(
+                  onPressed: toggle,
+                  icon: Icon(
+                    obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                    color: const Color(0xFF757575),
+                  ),
+                )
+              : null,
+          hintText: hint,
+          hintStyle: const TextStyle(color: Color(0xFF9E9E9E), fontSize: 16),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),
       ),
     );
