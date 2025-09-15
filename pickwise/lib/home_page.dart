@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class HomePage extends StatefulWidget {
-  final String userName;
+  final String userName; // 🔹 从登录/注册时传进来
 
-  const HomePage({super.key, this.userName = "Jack"});
+  const HomePage({super.key, required this.userName});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -46,22 +48,19 @@ class _HomePageState extends State<HomePage> {
                       size: 24,
                     ),
                   ),
-                  
+
                   // Logo and Title
                   Row(
                     children: [
                       // Logo
-                      Container(
-                        child: Image.asset(
-                          'assets/images/pickwise_logo_middle_rmbg.png',
-                          width: 32,
-                          height: 32,
-                          fit: BoxFit.contain, // Maintains aspect ratio
-                        )
+                      Image.asset(
+                        'assets/images/pickwise_logo_middle_rmbg.png',
+                        width: 32,
+                        height: 32,
+                        fit: BoxFit.contain,
                       ),
-                      
                       const SizedBox(width: 8),
-                      
+
                       // App name
                       const Text(
                         'Pickwise',
@@ -73,15 +72,16 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ],
                   ),
-                  
+
                   // Profile/Settings Icon
                   IconButton(
-                    onPressed: () {
-                      // Logout logic
-                      print('Profile pressed');
-                      // Example: Navigate to login page and remove all previous routes
-                      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-                      // You can also clear user session or token here if needed
+                    onPressed: () async {
+                      // 🔹 Logout logic
+                      await FirebaseAuth.instance.signOut();
+                      Navigator.of(context).pushNamedAndRemoveUntil(
+                        '/login',
+                        (route) => false,
+                      );
                     },
                     icon: const Icon(
                       Icons.account_circle_outlined,
@@ -92,7 +92,7 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
-            
+
             // Main Content Area
             Expanded(
               child: Container(
@@ -103,16 +103,16 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     // Greeting
                     Text(
-                      'Hi, ${widget.userName}!',
+                      'Hi, ${widget.userName}!', // 🔹 显示后端传过来的 username
                       style: const TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF37474F),
                       ),
                     ),
-                    
+
                     const SizedBox(height: 16),
-                    
+
                     // Subtitle
                     const Text(
                       'What can I help you?',
@@ -125,17 +125,14 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
-            
+
             // Bottom Input Area
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.8),
-                border: Border(
-                  top: BorderSide(
-                    color: const Color(0xFFE0E0E0),
-                    width: 1,
-                  ),
+                border: const Border(
+                  top: BorderSide(color: Color(0xFFE0E0E0), width: 1),
                 ),
               ),
               child: Row(
@@ -147,9 +144,7 @@ class _HomePageState extends State<HomePage> {
                       decoration: BoxDecoration(
                         color: const Color(0xFFF5F5F5),
                         borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color: const Color(0xFFE0E0E0),
-                        ),
+                        border: Border.all(color: Color(0xFFE0E0E0)),
                       ),
                       child: TextField(
                         controller: _messageController,
@@ -168,9 +163,9 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(width: 12),
-                  
+
                   // Send Button
                   Container(
                     width: 48,
@@ -188,11 +183,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     child: IconButton(
                       onPressed: _sendMessage,
-                      icon: const Icon(
-                        Icons.send,
-                        color: Colors.white,
-                        size: 20,
-                      ),
+                      icon: const Icon(Icons.send, color: Colors.white, size: 20),
                     ),
                   ),
                 ],
@@ -207,11 +198,6 @@ class _HomePageState extends State<HomePage> {
   void _sendMessage() {
     if (_messageController.text.trim().isNotEmpty) {
       print('Sending message: ${_messageController.text}');
-      
-      // Handle sending message here
-      // You can add chat functionality, API calls, etc.
-      
-      // Clear the input field
       _messageController.clear();
     }
   }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 
 class PasswordResetSuccessPage extends StatelessWidget {
-  const PasswordResetSuccessPage({Key? key}) : super(key: key);
+  const PasswordResetSuccessPage({super.key});
 
   @override
   Widget build(BuildContext context) {

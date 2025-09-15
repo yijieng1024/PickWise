@@ -33,7 +33,7 @@ class MyApp extends StatelessWidget {
             );
           } else if (snapshot.hasData) {
             // user logged in → HomePage
-            return HomePage();
+            return HomePage(userName: '',);
           } else {
             // user not logged in → WelcomeScreen
             return WelcomeScreen();
@@ -43,7 +43,7 @@ class MyApp extends StatelessWidget {
 
       // 路由表
       routes: {
-        '/home': (context) => HomePage(),
+        '/home': (context) => HomePage(userName: '',),
         '/login': (context) => LoginPage(),
         '/signup': (context) => SignUpPage(),
         '/welcome': (context) => WelcomeScreen(),

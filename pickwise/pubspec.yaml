@@ -13,6 +13,8 @@ dependencies:
   firebase_core: ^4.1.0
   firebase_auth: ^6.0.2
   http: ^1.2.0
+  google_sign_in: ^6.2.1
+  shared_preferences: ^2.1.1
   
 dev_dependencies:
   flutter_test:
@@ -37,3 +39,9 @@ flutter:
         - asset: assets/fonts/Poppins/Poppins-Regular.ttf
         - asset: assets/fonts/Poppins/Poppins-Bold.ttf
           weight: 700
+
+dependency_overrides:
+  characters: ^1.4.1
+  material_color_utilities: ^0.13.0
+  meta: ^1.17.0
+  test_api: ^0.7.7
