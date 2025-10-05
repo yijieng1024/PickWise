@@ -1,19 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart'; // Import Firebase Core
+import 'package:shared_preferences/shared_preferences.dart';
 import 'login_page.dart';
 import 'signup_page.dart';
 import 'welcome_page.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'home_page.dart';
+import 'profile_settings_page.dart';
+import 'user_preference_profile_page.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
+  Future<bool> checkLoginStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+    return token != null; // if token exists, user is logged in
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,30 +29,33 @@ class MyApp extends StatelessWidget {
         fontFamily: 'Poppins',
         primarySwatch: Colors.teal,
       ),
-      // Is that user logged in?
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
+
+      home: FutureBuilder<bool>(
+        future: checkLoginStatus(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (!snapshot.hasData) {
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             );
-          } else if (snapshot.hasData) {
-            // user logged in → HomePage
-            return HomePage(userName: '',);
+          }
+
+          if (snapshot.data == true) {
+            // Login status is true → HomePage
+            return HomePage(userName: '', userAvatar: '', userId: '');
           } else {
-            // user not logged in → WelcomeScreen
+            // Login status is false → WelcomePage
             return WelcomeScreen();
           }
         },
       ),
 
-      // 路由表
       routes: {
-        '/home': (context) => HomePage(userName: '',),
+        '/home': (context) => HomePage(userName: '', userAvatar: '', userId: ''),
         '/login': (context) => LoginPage(),
         '/signup': (context) => SignUpPage(),
         '/welcome': (context) => WelcomeScreen(),
+        '/profile': (context) => ProfileSettingsPage(),
+        '/user-preference': (context) => UserPreferenceProfilePage(),
       },
     );
   }
