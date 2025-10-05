@@ -46,11 +46,17 @@ class _LoginPageState extends State<LoginPage> {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('jwt_token', data['token']);
         await prefs.setString('username', data['user']['username']);
+        await prefs.setString('user_id', data['user']['id']);
+        await prefs.setString('user_avatar', data['user']['avatar'] ?? '');
 
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-              builder: (context) => HomePage(userName: data['user']['username'])),
+              builder: (context) => HomePage(
+                    userName: data['user']['username'],
+                    userAvatar: data['user']['avatar'] ?? '',
+                    userId: data['user']['id'],
+                  )),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -65,44 +71,85 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  // ✅ Google 登录
   Future<void> _signInWithGoogle() async {
-    try {
-      final googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) return;
+  try {
+    final googleSignIn = GoogleSignIn.instance;
+    await googleSignIn.initialize(
+      serverClientId: 'your-server-client-id.googleusercontent.com',  // For backend idToken verification; get from Google Cloud Console
+    );
 
-      final response = await http.post(
-        Uri.parse("${ApiConstants.baseUrl}/api/auth/google"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "uid": googleUser.id,
-          "email": googleUser.email,
-          "username": googleUser.displayName ?? googleUser.email.split('@')[0],
-          "photoUrl": googleUser.photoUrl,
-        }),
-      );
+    // Authenticate and get user directly (returns GoogleSignInAccount on success; throws on fail/cancel)
+    final GoogleSignInAccount googleUser = await googleSignIn.authenticate(
+      scopeHint: ['email', 'profile'],  // Optional hint; configure full scopes in Google Console
+    );
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('jwt_token', data['token']);
-        await prefs.setString('username', data['user']['username']);
+    // Fetch idToken synchronously (no await in v7.x)
+    final GoogleSignInAuthentication auth = googleUser.authentication;
+    final String? idToken = auth.idToken;
+    if (idToken == null) {
+      throw Exception('Failed to retrieve idToken');
+    }
 
+    // Send idToken to backend (update backend to verify with Google)
+    final response = await http.post(
+      Uri.parse("${ApiConstants.baseUrl}/api/auth/google"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "idToken": idToken,  // Secure: Backend verifies this
+      }),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final data = jsonDecode(response.body);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('jwt_token', data['token']);
+      await prefs.setString('username', data['user']['username']);
+
+      // Navigate on success
+      if (context.mounted) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-              builder: (context) => HomePage(userName: data['user']['username'])),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Google login failed: ${response.body}")),
+            builder: (context) => HomePage(
+              userName: data['user']['username'],
+              userAvatar: data['user']['avatar'] ?? '',
+              userId: data['user']['id'],
+            ),
+          ),
         );
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Google sign-in error: $e")));
+    } else {
+      // Parse error safely
+      dynamic errorData = response.body;
+      try {
+        errorData = jsonDecode(response.body);
+      } catch (_) {
+        // Fallback if not JSON
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Google login failed: ${errorData['message'] ?? response.body ?? 'Unknown error'}")),
+      );
     }
+  } on GoogleSignInException catch (e) {
+    // Handle Google-specific errors (e.code is now an enum like GoogleSignInExceptionCode)
+    String message;
+    switch (e.code) {
+      case GoogleSignInExceptionCode.canceled:
+        message = 'Sign-in was canceled';  // User closed dialog
+        break;
+      default:
+        message = 'Sign-in failed: ${e.description ?? e.toString()}';
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  } catch (e) {
+    // Other errors (HTTP, JSON, etc.)
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Google sign-in error: $e")),
+    );
   }
+}
 
   Widget _buildTextFormField({
     required TextEditingController controller,

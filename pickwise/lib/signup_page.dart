@@ -69,7 +69,7 @@ class _SignUpPageState extends State<SignUpPage> {
           // 跳转 HomePage
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => HomePage(userName: userName)),
+            MaterialPageRoute(builder: (context) => HomePage(userName: userName, userAvatar: loginData['user']['avatar'] ?? '', userId: loginData['user']['id'])),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -92,10 +92,11 @@ class _SignUpPageState extends State<SignUpPage> {
 
   Future<void> _signInWithGoogle() async {
     try {
-      final GoogleSignIn googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-      if (googleUser == null) return; // 用户取消登录
-
+      final GoogleSignIn googleSignIn = GoogleSignIn.instance;
+      await googleSignIn.initialize();
+      final GoogleSignInAccount googleUser = await googleSignIn.authenticate(
+        scopeHint: ['email', 'profile'],
+      );
       final credential = {
         "uid": googleUser.id,
         "email": googleUser.email,
@@ -121,7 +122,7 @@ class _SignUpPageState extends State<SignUpPage> {
         // 跳转 HomePage
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => HomePage(userName: userName)),
+          MaterialPageRoute(builder: (context) => HomePage(userName: userName, userAvatar: data['user']['avatar'] ?? '', userId: data['user']['id'])),
         );
       } else {
         print("Google login failed: ${response.body}");
