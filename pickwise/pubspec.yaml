@@ -1,0 +1,53 @@
+name: PickWise
+description: "A Smart Recommendation System for Laptop."
+publish_to: 'none' 
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  firebase_core: ^4.1.0
+  firebase_auth: ^6.0.2
+  http: ^1.2.0
+  google_sign_in: ^7.2.0
+  shared_preferences: ^2.4.13
+  image_picker: ^1.0.7
+  flutter_markdown: ^0.7.1
+  flex_color_scheme: ^8.3.0
+  jwt_decoder: ^2.0.1
+  carousel_slider: ^5.0.0
+  
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_launcher_icons: ^0.14.4
+  flutter_lints: ^6.0.0
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/pickwise_logo_middle_rmbg.png"
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/uploads/laptops/
+
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins/Poppins-Regular.ttf
+        - asset: assets/fonts/Poppins/Poppins-Bold.ttf
+          weight: 700
+
+dependency_overrides:
+  characters: ^1.4.1
+  material_color_utilities: ^0.13.0
+  meta: ^1.17.0
+  test_api: ^0.7.7
