@@ -126,7 +126,7 @@ class _UserPreferenceProfilePageState extends State<UserPreferenceProfilePage> {
                     icon: const Icon(Icons.refresh),
                     label: const Text("Redo Questionnaire"),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color.fromARGB(255, 210, 147, 0),
+                      backgroundColor: const Color(0xFF00ACC1),
                       foregroundColor: Colors.white,
                       minimumSize: const Size(double.infinity, 55),
                       shape: RoundedRectangleBorder(

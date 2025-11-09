@@ -1,18 +1,25 @@
+const dotenv = require("dotenv");
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
-const dotenv = require("dotenv");
 const connectDB = require("./db");
 const authRoutes = require("./routes/auth");
 const profileRoutes = require("./routes/profile");
 const aiRouter = require("./routes/aiRoute");
 const conversationRoutes = require("./routes/conversationRoute");
 const cartRoutes = require ("./routes/cartRoutes");
+const pickScoreRoute = require("./routes/pickscoreRoute");
+const addressRoute = require("./routes/addressRoutes");
 
 // require("./PickAI").initLaptopVectorStore().then(() => console.log("Warm"));
 
 require("dotenv").config();
 const app = express();
+
+// ✅ Increase the JSON payload limit to 10MB
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ limit: "10mb", extended: true }));
+app.use(cors());
 
 // Log every incoming request
 app.use((req, res, next) => {
@@ -37,6 +44,10 @@ app.use("/api/ai", aiRouter);
 app.use("/api/conversation", conversationRoutes);
 app.use("/api/laptops", require("./routes/laptopRoute"));
 app.use("/api/cart", cartRoutes);
+app.use("/api", pickScoreRoute);
+app.use("/address", addressRoute);
+app.use("/api/order", require("./routes/orderRoute"));
+app.use("/api/payment", require("./routes/paymentRoute"));
 
 const PORT = process.env.PORT || 5000;
 

@@ -59,7 +59,7 @@ class _QuestionnairePageState extends State<QuestionnairePage> {
     ),
     Question(
       id: 'Q3',
-      question: 'What is the most important factor(s) when choosing a laptop/desktop?',
+      question: 'What is the most important factor(s) when choosing a laptop/desktop? Please drag the below card for priority ranking.',
       type: QuestionType.ranking,
       options: [
         'Price',

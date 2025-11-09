@@ -243,7 +243,7 @@ async function queryLaptopLLM(userId, userQuery, conversationId) {
         return { ...l, pick_score: score };
       })
     );
-
+  
     scored.sort((a, b) => b.pick_score - a.pick_score);
     const top = scored.slice(0, 3);
 

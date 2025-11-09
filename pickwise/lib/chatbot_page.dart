@@ -5,7 +5,7 @@ import 'api_constants.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 import 'shopping_page.dart';
@@ -123,6 +123,7 @@ void _scrollToBottom({bool force = false}) {
                 }
               },
             ),
+            /*
             ListTile(
               leading: const Icon(Icons.settings_outlined),
               title: const Text('App Settings'),
@@ -132,7 +133,7 @@ void _scrollToBottom({bool force = false}) {
               leading: const Icon(Icons.help_outline),
               title: const Text('Help & Support'),
               onTap: () => Navigator.pop(context),
-            ),
+            ),*/
             const Divider(),
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),

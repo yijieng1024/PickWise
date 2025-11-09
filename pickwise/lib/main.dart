@@ -1,3 +1,4 @@
+import 'package:PickWise/cart_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +9,7 @@ import 'chatbot_page.dart';
 import 'profile_settings_page.dart';
 import 'user_preference_profile_page.dart';
 import 'shopping_page.dart';
+import 'address_book_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -70,6 +72,8 @@ class MyApp extends StatelessWidget {
         '/profile': (context) => ProfileSettingsPage(),
         '/user-preference': (context) => UserPreferenceProfilePage(),
         '/chatbot': (context) => const ChatbotPage(userName: '', userId: ''),
+        '/addressBook': (context) => const AddressBookPage(token: ''),
+        '/cart': (context) => const CartPage(),
       },
     );
   }

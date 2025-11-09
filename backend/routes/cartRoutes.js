@@ -69,4 +69,21 @@ router.delete("/remove/:userId/:laptopId", async (req, res) => {
   }
 });
 
+// ✅ Clear cart after checkout
+router.delete("/clear/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const cart = await Cart.findOne({ userId });
+    if (!cart) return res.status(404).json({ message: "Cart not found" });
+
+    cart.items = [];
+    await cart.save();
+    res.json({ message: "Cart cleared successfully" });
+  } catch (error) {
+    console.error("Error clearing cart:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
 module.exports = router;
