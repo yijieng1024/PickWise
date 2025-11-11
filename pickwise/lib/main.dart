@@ -10,6 +10,7 @@ import 'profile_settings_page.dart';
 import 'user_preference_profile_page.dart';
 import 'shopping_page.dart';
 import 'address_book_page.dart';
+import 'order_history_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -74,6 +75,7 @@ class MyApp extends StatelessWidget {
         '/chatbot': (context) => const ChatbotPage(userName: '', userId: ''),
         '/addressBook': (context) => const AddressBookPage(token: ''),
         '/cart': (context) => const CartPage(),
+        '/orders': (context) => const OrderHistoryPage(),
       },
     );
   }

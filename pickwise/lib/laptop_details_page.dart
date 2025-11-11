@@ -5,11 +5,14 @@ import 'package:jwt_decoder/jwt_decoder.dart';
 import 'api_constants.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'chatbot_page.dart';
 
 class LaptopDetailsPage extends StatefulWidget {
-  final Map<String, dynamic> laptop;
+  final Map<String, dynamic>? laptop;
+  final String? laptopId;
 
-  const LaptopDetailsPage({super.key, required this.laptop});
+  const LaptopDetailsPage({super.key, this.laptop, this.laptopId})
+      : assert(laptop != null || laptopId != null, 'Provide either laptop or laptopId');
 
   @override
   State<LaptopDetailsPage> createState() => _LaptopDetailsPageState();
@@ -18,6 +21,47 @@ class LaptopDetailsPage extends StatefulWidget {
 class _LaptopDetailsPageState extends State<LaptopDetailsPage> {
   int _currentImageIndex = 0;
   bool _isAddingToCart = false;
+
+  Map<String, dynamic> _laptop = {};
+  bool _isLoadingLaptop = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.laptop != null) {
+      _laptop = Map<String, dynamic>.from(widget.laptop!);
+    } else if (widget.laptopId != null) {
+      _fetchLaptopById(widget.laptopId!);
+    }
+  }
+
+  Future<void> _fetchLaptopById(String id) async {
+    setState(() => _isLoadingLaptop = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+      final uri = Uri.parse('${ApiConstants.baseUrl}/api/laptops/$id');
+      final resp = await http.get(uri, headers: {
+        if (token != null) 'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      });
+
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        setState(() {
+          _laptop = Map<String, dynamic>.from(data);
+        });
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to load laptop details')));
+        }
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoadingLaptop = false);
+    }
+  }
 
   Future<Map<String, String?>> getUserIdFromToken(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
@@ -28,7 +72,7 @@ class _LaptopDetailsPageState extends State<LaptopDetailsPage> {
       debugPrint("🔍 Decoded JWT: $decoded");
       return {
         'userId': decoded['id']?.toString(),
-        'userName': decoded['name']?.toString()
+        'userName': decoded['name']?.toString(),
       };
     }
 
@@ -105,7 +149,16 @@ class _LaptopDetailsPageState extends State<LaptopDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final laptop = widget.laptop;
+    final laptop = widget.laptop ?? _laptop;
+    if (_isLoadingLaptop) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (laptop.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Laptop Details'), backgroundColor: const Color(0xFFB2DFDB)),
+        body: const Center(child: Text('No laptop details available')),
+      );
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -196,7 +249,7 @@ class _LaptopDetailsPageState extends State<LaptopDetailsPage> {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        
+
                         // Product Name
                         Text(
                           laptop['product_name'] ?? 'Unnamed Laptop',
@@ -206,7 +259,7 @@ class _LaptopDetailsPageState extends State<LaptopDetailsPage> {
                             color: Color(0xFF263238),
                           ),
                         ),
-                        
+
                         // Model Codes
                         if (laptop['model_code'] != null &&
                             laptop['model_code'].toString().isNotEmpty) ...[
@@ -242,18 +295,21 @@ class _LaptopDetailsPageState extends State<LaptopDetailsPage> {
                                 ...laptop['model_code']
                                     .toString()
                                     .split(';')
-                                    .map((code) => Padding(
-                                          padding: const EdgeInsets.only(
-                                              left: 20, top: 2),
-                                          child: Text(
-                                            '• ${code.trim()}',
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              color: Color(0xFF546E7A),
-                                            ),
+                                    .map(
+                                      (code) => Padding(
+                                        padding: const EdgeInsets.only(
+                                          left: 20,
+                                          top: 2,
+                                        ),
+                                        child: Text(
+                                          '• ${code.trim()}',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF546E7A),
                                           ),
-                                        ))
-                                    .toList(),
+                                        ),
+                                      ),
+                                    ),
                               ],
                             ),
                           ),
@@ -363,10 +419,19 @@ class _LaptopDetailsPageState extends State<LaptopDetailsPage> {
               // Ask Chatbot button
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Ask Chatbot Feature Coming Soon!"),
+                  onPressed: () async {
+                    final user = await getUserIdFromToken(context);
+                    final userId = user['userId'] ?? '';
+                    final userName = await fetchUserNameById(userId) ?? 'User';
+
+                    // If token was invalid getUserIdFromToken may have redirected to login already.
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ChatbotPage(
+                          userId: userId,
+                          userName: userName,
+                        ),
                       ),
                     );
                   },
@@ -387,7 +452,7 @@ class _LaptopDetailsPageState extends State<LaptopDetailsPage> {
                 ),
               ),
               const SizedBox(width: 12),
-              
+
               // Add to Cart button
               Expanded(
                 child: ElevatedButton.icon(
@@ -416,8 +481,7 @@ class _LaptopDetailsPageState extends State<LaptopDetailsPage> {
                                   const SnackBar(
                                     content: Row(
                                       children: [
-                                        Icon(Icons.check_circle,
-                                            color: Colors.white),
+                                        Icon(Icons.check_circle, color: Colors.white),
                                         SizedBox(width: 8),
                                         Text("Added to Cart Successfully!"),
                                       ],
@@ -429,26 +493,16 @@ class _LaptopDetailsPageState extends State<LaptopDetailsPage> {
                             } else {
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text("Failed to add to cart"),
-                                    backgroundColor: Colors.red,
-                                  ),
+                                  const SnackBar(content: Text("Failed to add to cart"), backgroundColor: Colors.red),
                                 );
                               }
                             }
                           } catch (e) {
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text("Error: $e"),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
                             }
                           } finally {
-                            if (mounted) {
-                              setState(() => _isAddingToCart = false);
-                            }
+                            if (mounted) setState(() => _isAddingToCart = false);
                           }
                         },
                   icon: _isAddingToCart
@@ -457,8 +511,9 @@ class _LaptopDetailsPageState extends State<LaptopDetailsPage> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
                           ),
                         )
                       : const Icon(Icons.add_shopping_cart, size: 20),
@@ -484,6 +539,31 @@ class _LaptopDetailsPageState extends State<LaptopDetailsPage> {
       ),
     );
   }
+
+    Future<String?> fetchUserNameById(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+      final uri = Uri.parse('${ApiConstants.baseUrl}/api/profile/username/$userId');
+      final resp = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        return data['username']?.toString();
+      } else {
+        debugPrint('fetchUserNameById failed: ${resp.statusCode} ${resp.body}');
+      }
+    } catch (e) {
+      debugPrint('Error fetchUserNameById: $e');
+    }
+    return null;
+  }
+
 
   List<String> _getImagePaths(Map<String, dynamic> laptop) {
     return laptop['imageURL']
@@ -530,7 +610,7 @@ class _LaptopDetailsPageState extends State<LaptopDetailsPage> {
       {
         "title": "Processor",
         "value":
-            "${laptop['processor_name'] ?? 'Unknown CPU'} ${(laptop['processor_ghz']?.toString() ?? '')} Ghz"
+            "${laptop['processor_name'] ?? 'Unknown CPU'} ${(laptop['processor_ghz']?.toString() ?? '')} Ghz",
       },
       {"title": "RAM", "value": "${laptop['ram_gb']?.toString() ?? ''} GB"},
       {"title": "SSD", "value": formattedSsd},
@@ -539,27 +619,27 @@ class _LaptopDetailsPageState extends State<LaptopDetailsPage> {
       {
         "title": "Display",
         "value":
-            "${laptop['display_type'] ?? ''} ${(laptop['display_resolution']?.toString().isNotEmpty ?? false) ? laptop['display_resolution'] : 'Unknown Resolution'} ${(laptop['display_size_inches'] ?? 'Unknown Size')} inches"
+            "${laptop['display_type'] ?? ''} ${(laptop['display_resolution']?.toString().isNotEmpty ?? false) ? laptop['display_resolution'] : 'Unknown Resolution'} ${(laptop['display_size_inches'] ?? 'Unknown Size')} inches",
       },
       {"title": "I/O Ports", "value": "\n${formatPorts(laptop['io_ports'])}"},
       {"title": "Network", "value": laptop['network'] ?? 'Unknown Network'},
       {
         "title": "Bluetooth",
-        "value": laptop['bluetooth'] ?? 'Unknown Bluetooth'
+        "value": laptop['bluetooth'] ?? 'Unknown Bluetooth',
       },
       {
         "title": "Battery",
         "value": laptop['battery_capacity_wh'] != null
             ? "${laptop['battery_capacity_wh']} Wh"
-            : 'Unknown Battery'
+            : 'Unknown Battery',
       },
       {
         "title": "Power Supply",
-        "value": laptop['power_supply'] ?? 'Unknown Power Supply'
+        "value": laptop['power_supply'] ?? 'Unknown Power Supply',
       },
       {
         "title": "Weight",
-        "value": "${laptop['weight_kg']?.toString() ?? 'Unknown'} kg"
+        "value": "${laptop['weight_kg']?.toString() ?? 'Unknown'} kg",
       },
       {"title": "Dimensions", "value": laptop['dimension_cm'] ?? 'Unknown'},
       {"title": "Expansion Slots", "value": laptop['expansion_slots'] ?? ''},
@@ -570,58 +650,55 @@ class _LaptopDetailsPageState extends State<LaptopDetailsPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: specs
           .where((spec) => spec['value'] != null && spec['value']!.isNotEmpty)
-          .map((spec) => Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5F5F5),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Colors.grey[300]!,
-                    width: 1,
+          .map(
+            (spec) => Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF5F5F5),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[300]!, width: 1),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    margin: const EdgeInsets.only(top: 6),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF00ACC1),
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      margin: const EdgeInsets.only(top: 6),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF00ACC1),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: RichText(
-                        text: TextSpan(
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Color(0xFF263238),
-                          ),
-                          children: [
-                            TextSpan(
-                              text: "${spec['title']}: ",
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF263238),
-                              ),
-                            ),
-                            TextSpan(
-                              text: spec['value'],
-                              style: const TextStyle(
-                                color: Color(0xFF546E7A),
-                              ),
-                            ),
-                          ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF263238),
                         ),
+                        children: [
+                          TextSpan(
+                            text: "${spec['title']}: ",
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF263238),
+                            ),
+                          ),
+                          TextSpan(
+                            text: spec['value'],
+                            style: const TextStyle(color: Color(0xFF546E7A)),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ))
+                  ),
+                ],
+              ),
+            ),
+          )
           .toList(),
     );
   }

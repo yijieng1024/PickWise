@@ -92,7 +92,9 @@ class _ShoppingPageState extends State<ShoppingPage> {
         if (context.mounted) {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const ProfileSettingsPage()),
+            MaterialPageRoute(
+              builder: (context) => const ProfileSettingsPage(),
+            ),
           );
         }
       }
@@ -131,74 +133,49 @@ class _ShoppingPageState extends State<ShoppingPage> {
   }
 
   void _applyFilters() {
-    List<Map<String, dynamic>> results = laptops;
+    List<Map<String, dynamic>> results = List.from(laptops);
 
-    print('=== APPLY FILTERS DEBUG ===');
-    print('Total laptops: ${laptops.length}');
-    print('Search query: "$searchQuery"');
-    print('Selected brand: $selectedBrand');
-    print('Selected processor: $selectedProcessor');
-    print('Price range: ${priceRange.start} - ${priceRange.end}');
-
-    // Search filter
-    if (searchQuery.isNotEmpty) {
-      results = results.where((laptop) {
-        final productName = laptop['product_name']?.toString().toLowerCase() ?? '';
-        final brand = laptop['brand']?.toString().toLowerCase() ?? '';
-        final processor = laptop['processor_name']?.toString().toLowerCase() ?? '';
-        final modelCode = laptop['model_code']?.toString().toLowerCase() ?? '';
-        final query = searchQuery.toLowerCase();
-        
-        return productName.contains(query) ||
-            brand.contains(query) ||
-            processor.contains(query) ||
-            modelCode.contains(query);
+    final query = searchQuery.toLowerCase();
+    if (query.isNotEmpty) {
+      results = results.where((l) {
+        return [
+          'product_name',
+          'brand',
+          'processor_name',
+          'model_code',
+        ].any((k) => l[k]?.toString().toLowerCase().contains(query) ?? false);
       }).toList();
-      print('After search filter: ${results.length} laptops');
     }
 
-    // Brand filter
     if (selectedBrand != 'All') {
-      results = results.where((laptop) {
-        return laptop['brand']?.toString() == selectedBrand;
-      }).toList();
-      print('After brand filter: ${results.length} laptops');
+      results = results.where((l) => l['brand'] == selectedBrand).toList();
     }
 
-    // Processor filter
     if (selectedProcessor != 'All') {
-      results = results.where((laptop) {
-        final processor = laptop['processor_name']?.toString() ?? '';
-        return processor.contains(selectedProcessor);
-      }).toList();
-      print('After processor filter: ${results.length} laptops');
+      results = results
+          .where(
+            (l) =>
+                l['processor_name']?.toString().contains(selectedProcessor) ??
+                false,
+          )
+          .toList();
     }
 
-    // Price filter
-    results = results.where((laptop) {
-      final priceValue = laptop['price_rm'];
+    results = results.where((l) {
       double price = 0.0;
-      
-      if (priceValue != null) {
-        if (priceValue is num) {
-          price = priceValue.toDouble();
-        } else {
-          String priceStr = priceValue.toString().trim();
-          priceStr = priceStr.replaceAll('RM', '').replaceAll(' ', '').trim();
-          price = double.tryParse(priceStr) ?? 0.0;
-        }
-      }
-      
-      final inRange = price >= priceRange.start && price <= priceRange.end;
-      return inRange;
+      final p = l['price_rm'];
+      if (p is num)
+        price = p.toDouble();
+      else if (p is String)
+        price = double.tryParse(p.replaceAll('RM', '').trim()) ?? 0.0;
+      return price >= priceRange.start && price <= priceRange.end;
     }).toList();
-    
-    print('After price filter: ${results.length} laptops');
-    print('=== END FILTER DEBUG ===');
 
     setState(() {
       filteredLaptops = results;
-      currentMax = itemsPerPage;
+      currentMax = results.length < itemsPerPage
+          ? results.length
+          : itemsPerPage;
     });
   }
 
@@ -207,19 +184,20 @@ class _ShoppingPageState extends State<ShoppingPage> {
     Set<String> processorSet = {};
 
     // print('=== EXTRACTING FILTERS ===');
-    
+
     for (var laptop in laptops) {
       // Extract brands
       if (laptop['brand'] != null && laptop['brand'].toString().isNotEmpty) {
         brandSet.add(laptop['brand'].toString());
       }
-      
+
       // Extract processors - get the full processor name
-      if (laptop['processor_name'] != null && laptop['processor_name'].toString().isNotEmpty) {
+      if (laptop['processor_name'] != null &&
+          laptop['processor_name'].toString().isNotEmpty) {
         final processor = laptop['processor_name'].toString();
         processorSet.add(processor); // Add full processor name
-        
-        print('Found processor: $processor');
+
+        // print('Found processor: $processor');
       }
     }
     /*
@@ -390,9 +368,15 @@ class _ShoppingPageState extends State<ShoppingPage> {
                       child: DropdownButton<String>(
                         value: selectedBrand,
                         isExpanded: true,
-                        icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF00ACC1)),
+                        icon: const Icon(
+                          Icons.keyboard_arrow_down,
+                          color: Color(0xFF00ACC1),
+                        ),
                         items: brands.map((brand) {
-                          return DropdownMenuItem(value: brand, child: Text(brand));
+                          return DropdownMenuItem(
+                            value: brand,
+                            child: Text(brand),
+                          );
                         }).toList(),
                         onChanged: (value) {
                           setModalState(() => selectedBrand = value!);
@@ -424,11 +408,14 @@ class _ShoppingPageState extends State<ShoppingPage> {
                       child: DropdownButton<String>(
                         value: selectedProcessor,
                         isExpanded: true,
-                        icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF00ACC1)),
+                        icon: const Icon(
+                          Icons.keyboard_arrow_down,
+                          color: Color(0xFF00ACC1),
+                        ),
                         menuMaxHeight: 300,
                         items: processors.map((proc) {
                           return DropdownMenuItem(
-                            value: proc, 
+                            value: proc,
                             child: Text(
                               proc,
                               style: const TextStyle(fontSize: 14),
@@ -473,11 +460,17 @@ class _ShoppingPageState extends State<ShoppingPage> {
                     children: [
                       Text(
                         'RM ${priceRange.start.round()}',
-                        style: const TextStyle(fontSize: 14, color: Color(0xFF546E7A)),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF546E7A),
+                        ),
                       ),
                       Text(
                         'RM ${priceRange.end.round()}',
-                        style: const TextStyle(fontSize: 14, color: Color(0xFF546E7A)),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF546E7A),
+                        ),
                       ),
                     ],
                   ),
@@ -503,7 +496,10 @@ class _ShoppingPageState extends State<ShoppingPage> {
                       ),
                       child: const Text(
                         'Apply Filters',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
@@ -550,20 +546,25 @@ class _ShoppingPageState extends State<ShoppingPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const SizedBox(height: 24),
-                              
+
                               // Welcome Section
                               Container(
                                 padding: const EdgeInsets.all(24),
                                 decoration: BoxDecoration(
                                   gradient: const LinearGradient(
-                                    colors: [Color(0xFFB2DFDB), Color(0xFF80CBC4)],
+                                    colors: [
+                                      Color(0xFFB2DFDB),
+                                      Color(0xFF80CBC4),
+                                    ],
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                   ),
                                   borderRadius: BorderRadius.circular(20),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFF00ACC1).withOpacity(0.2),
+                                      color: const Color(
+                                        0xFF00ACC1,
+                                      ).withOpacity(0.2),
                                       blurRadius: 15,
                                       offset: const Offset(0, 4),
                                     ),
@@ -609,15 +610,20 @@ class _ShoppingPageState extends State<ShoppingPage> {
 
                               // Section Header
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Row(
                                     children: [
                                       Container(
                                         padding: const EdgeInsets.all(8),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF00ACC1).withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(8),
+                                          color: const Color(
+                                            0xFF00ACC1,
+                                          ).withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                         ),
                                         child: const Icon(
                                           Icons.laptop_mac,
@@ -642,7 +648,9 @@ class _ShoppingPageState extends State<ShoppingPage> {
                                       vertical: 6,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF00ACC1).withOpacity(0.1),
+                                      color: const Color(
+                                        0xFF00ACC1,
+                                      ).withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(20),
                                     ),
                                     child: Text(
@@ -679,17 +687,20 @@ class _ShoppingPageState extends State<ShoppingPage> {
                                         controller: _searchController,
                                         decoration: InputDecoration(
                                           hintText: 'Search laptops...',
-                                          hintStyle: TextStyle(color: Colors.grey[400]),
+                                          hintStyle: TextStyle(
+                                            color: Colors.grey[400],
+                                          ),
                                           prefixIcon: const Icon(
                                             Icons.search,
                                             color: Color(0xFF00ACC1),
                                             size: 24,
                                           ),
                                           border: InputBorder.none,
-                                          contentPadding: const EdgeInsets.symmetric(
-                                            horizontal: 16,
-                                            vertical: 14,
-                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 16,
+                                                vertical: 14,
+                                              ),
                                         ),
                                       ),
                                     ),
@@ -700,11 +711,14 @@ class _ShoppingPageState extends State<ShoppingPage> {
                                     ),
                                     InkWell(
                                       onTap: _showFilterBottomSheet,
-                                      borderRadius: const BorderRadius.horizontal(
-                                        right: Radius.circular(16),
-                                      ),
+                                      borderRadius:
+                                          const BorderRadius.horizontal(
+                                            right: Radius.circular(16),
+                                          ),
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                        ),
                                         child: Row(
                                           children: [
                                             const Icon(
@@ -718,8 +732,12 @@ class _ShoppingPageState extends State<ShoppingPage> {
                                                 priceRange.start > 0 ||
                                                 priceRange.end < 15000)
                                               Container(
-                                                margin: const EdgeInsets.only(left: 4),
-                                                padding: const EdgeInsets.all(6),
+                                                margin: const EdgeInsets.only(
+                                                  left: 4,
+                                                ),
+                                                padding: const EdgeInsets.all(
+                                                  6,
+                                                ),
                                                 decoration: const BoxDecoration(
                                                   color: Color(0xFF00ACC1),
                                                   shape: BoxShape.circle,
@@ -754,7 +772,9 @@ class _ShoppingPageState extends State<ShoppingPage> {
                                       ),
                                     )
                                   : LaptopGrid(
-                                      laptops: filteredLaptops.take(currentMax).toList(),
+                                      laptops: filteredLaptops
+                                          .take(currentMax)
+                                          .toList(),
                                     ),
 
                               const SizedBox(height: 20),
@@ -764,7 +784,10 @@ class _ShoppingPageState extends State<ShoppingPage> {
                                 Center(
                                   child: ElevatedButton.icon(
                                     onPressed: _loadMoreLaptops,
-                                    icon: const Icon(Icons.expand_more, size: 20),
+                                    icon: const Icon(
+                                      Icons.expand_more,
+                                      size: 20,
+                                    ),
                                     label: Text(
                                       'Load More (${filteredLaptops.length - currentMax} remaining)',
                                     ),
@@ -847,6 +870,22 @@ class _ShoppingPageState extends State<ShoppingPage> {
                           // User Avatar with Logout
                           GestureDetector(
                             onTap: () async {
+                              // If username is missing (empty), immediately logout and go to /login
+                              if (widget.userName.isEmpty ||
+                                  widget.userId.toString() == 'Guest') {
+                                final prefs =
+                                    await SharedPreferences.getInstance();
+                                await prefs.remove("jwt_token");
+                                if (context.mounted) {
+                                  Navigator.of(context).pushNamedAndRemoveUntil(
+                                    '/login',
+                                    (route) => false,
+                                  );
+                                }
+                                return;
+                              }
+
+                              // Otherwise show confirmation dialog
                               final confirm = await showDialog<bool>(
                                 context: context,
                                 builder: (context) => AlertDialog(
@@ -854,22 +893,30 @@ class _ShoppingPageState extends State<ShoppingPage> {
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   title: const Text('Logout'),
-                                  content: const Text('Are you sure you want to logout?'),
+                                  content: const Text(
+                                    'Are you sure you want to logout?',
+                                  ),
                                   actions: [
                                     TextButton(
-                                      onPressed: () => Navigator.pop(context, false),
+                                      onPressed: () =>
+                                          Navigator.pop(context, false),
                                       child: const Text(
                                         'Cancel',
                                         style: TextStyle(color: Colors.grey),
                                       ),
                                     ),
                                     ElevatedButton(
-                                      onPressed: () => Navigator.pop(context, true),
+                                      onPressed: () =>
+                                          Navigator.pop(context, true),
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF00ACC1),
+                                        backgroundColor: const Color(
+                                          0xFF00ACC1,
+                                        ),
                                         foregroundColor: Colors.white,
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                         ),
                                       ),
                                       child: const Text('Logout'),
@@ -879,7 +926,8 @@ class _ShoppingPageState extends State<ShoppingPage> {
                               );
 
                               if (confirm == true) {
-                                final prefs = await SharedPreferences.getInstance();
+                                final prefs =
+                                    await SharedPreferences.getInstance();
                                 await prefs.remove("jwt_token");
                                 if (context.mounted) {
                                   Navigator.of(context).pushNamedAndRemoveUntil(
@@ -902,7 +950,8 @@ class _ShoppingPageState extends State<ShoppingPage> {
                                   ),
                                 ],
                               ),
-                              child: (widget.userAvatar != null &&
+                              child:
+                                  (widget.userAvatar != null &&
                                       widget.userAvatar!.isNotEmpty)
                                   ? CircleAvatar(
                                       backgroundImage: NetworkImage(
@@ -916,7 +965,7 @@ class _ShoppingPageState extends State<ShoppingPage> {
                                       child: Text(
                                         widget.userName.isNotEmpty
                                             ? widget.userName[0].toUpperCase()
-                                            : "?",
+                                            : "G",
                                         style: const TextStyle(
                                           fontSize: 16,
                                           color: Colors.white,
@@ -986,10 +1035,7 @@ class _ShoppingPageState extends State<ShoppingPage> {
 class LaptopGrid extends StatelessWidget {
   final List<Map<String, dynamic>> laptops;
 
-  const LaptopGrid({
-    super.key,
-    required this.laptops,
-  });
+  const LaptopGrid({super.key, required this.laptops});
 
   @override
   Widget build(BuildContext context) {
@@ -998,11 +1044,7 @@ class LaptopGrid extends StatelessWidget {
         child: Column(
           children: [
             const SizedBox(height: 40),
-            Icon(
-              Icons.laptop_chromebook,
-              size: 80,
-              color: Colors.grey[300],
-            ),
+            Icon(Icons.laptop_chromebook, size: 80, color: Colors.grey[300]),
             const SizedBox(height: 16),
             Text(
               'No laptops available',

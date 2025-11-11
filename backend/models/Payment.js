@@ -229,7 +229,7 @@ paymentSchema.pre('save', async function(next) {
 // Indexes for better query performance
 paymentSchema.index({ orderId: 1, status: 1 });
 paymentSchema.index({ userId: 1, createdAt: -1 });
-paymentSchema.index({ transactionId: 1 });
+// paymentSchema.index({ transactionId: 1 });
 
 // Method to mask sensitive data for display
 paymentSchema.methods.getSafePaymentInfo = function() {

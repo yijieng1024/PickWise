@@ -8,6 +8,7 @@ import 'dart:async';
 import 'card_payment_page.dart';
 import 'online_banking_page.dart';
 import 'ewallet_payment_page.dart';
+import 'order_success_page.dart';
 
 class CheckoutPage extends StatefulWidget {
   final List<dynamic> selectedItems;
@@ -269,12 +270,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final result = await _navigateToPaymentPage(paymentId);
 
     if (result == true) {
-      // Payment successful
-      Navigator.pushNamedAndRemoveUntil(
-        context, 
-        '/order_success',
-        (route) => route.isFirst,
-        arguments: orderId,
+      // Payment successful - navigate to success page
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OrderSuccessPage(orderId: orderId),
+        ),
       );
     }
   } catch (e) {
@@ -810,7 +811,7 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
                       border: Border.all(color: const Color(0xFFE0E0E0)),
                     ),
                     child: DropdownButtonFormField<String>(
-                      value: selectedDelivery,
+                      initialValue: selectedDelivery,
                       decoration: const InputDecoration(
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(vertical: 8),
@@ -843,7 +844,7 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
                       border: Border.all(color: const Color(0xFFE0E0E0)),
                     ),
                     child: DropdownButtonFormField<String>(
-                      value: selectedPayment,
+                      initialValue: selectedPayment,
                       decoration: const InputDecoration(
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(vertical: 8),
@@ -851,8 +852,9 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
                       icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF00897B)),
                       items: const [
                         DropdownMenuItem(value: "Online Banking", child: Text("Online Banking")),
-                        DropdownMenuItem(value: "Credit/Debit Card", child: Text("Credit/Debit Card")),
-                        DropdownMenuItem(value: "E-Wallet", child: Text("E-Wallet (Touch 'n Go, GrabPay)")),
+                        // N/A
+                        //DropdownMenuItem(value: "Credit/Debit Card", child: Text("Credit/Debit Card")),
+                        //DropdownMenuItem(value: "E-Wallet", child: Text("E-Wallet (Touch 'n Go, GrabPay)")),
                       ],
                       onChanged: (value) => setState(() => selectedPayment = value!),
                     ),

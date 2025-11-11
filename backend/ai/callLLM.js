@@ -1,11 +1,3 @@
-/**
- * callLLM.js – FINAL, NO ERRORS
- * - Prompts fixed (no { in system)
- * - RAG works (client + index match)
- * - getUserPreferences defined
- * - Pick Score only on filtered laptops
- */
-
 const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
 const { ChatPromptTemplate } = require("@langchain/core/prompts");
 const { HumanMessage, AIMessage } = require("@langchain/core/messages");
@@ -118,7 +110,7 @@ Intent: {intent}
 `);
 
 const recommendPrompt = ChatPromptTemplate.fromTemplate(`
-  You are PickWise Assistant, a friendly tech-savvy laptop advisor who talks casually but professionally.
+  You are Pico who is PickWise Assistant, a friendly tech-savvy laptop advisor who talks casually but professionally.
 Recommend 1-3 laptops:
 - Brand Model
 - RM price
@@ -271,6 +263,25 @@ async function queryLaptopLLM(userId, userQuery, conversationId) {
     } catch (e) {
       console.warn("Recommend failed:", e.message);
       responseText += "\n\n" + laptopInfo.map(l => `- ${l.brand} ${l.name}: ${l.price} (${l.pick_score})`).join("\n");
+    }
+
+    // --- Conditionally append clickable links based on user intent ---
+    const hasPurchaseIntent = /\b(buy|purchase|add to cart|get|want to buy|interested in|show me details|check out|view)\b/i.test(userQuery);
+    
+    if (hasPurchaseIntent) {
+      try {
+        const links = top.map(l => {
+          const id = l._id ? String(l._id) : (l._id?.toString ? l._id.toString() : null);
+          const title = `${l.brand || ''} ${l.product_name || l.name || ''}`.trim();
+          return id ? `- [${title}](app://laptop/${id})` : null;
+        }).filter(Boolean).join("\n");
+
+        if (links && links.length) {
+          responseText = responseText.trim() + "\n\n**View & Buy:**\n" + links;
+        }
+      } catch (linkErr) {
+        console.warn("Failed to append links:", linkErr);
+      }
     }
 
     // Save

@@ -115,7 +115,7 @@ router.post("/save", async (req, res) => {
 async function generateTitle(messageContent) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const prompt = `Generate a short, natural conversation title (max 6 words) that summarizes this message:\n\n"${messageContent}"`;
+    const prompt = `Generate a short, natural conversation title (max 6 words) that summarizes this message:\n\n"${messageContent}. If you can't think of a good title, just reply with "Untitled Conversation".`;
     const result = await model.generateContent(prompt);
     return result.response.text().trim() || "Untitled Conversation";
   } catch (error) {
@@ -149,6 +149,71 @@ router.post("/:id/add-message", async (req, res) => {
     res.status(200).json(conversation);
   } catch (error) {
     res.status(500).json({ error: "Failed to add message" });
+  }
+});
+
+router.get("/list", async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: "userId required" });
+
+    const conversations = await Conversation.find({ userId })
+      .select("title _id createdAt")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.status(200).json(conversations);
+  } catch (error) {
+    console.error("Error fetching conversation list:", error);
+    res.status(500).json({ error: "Failed to fetch conversations" });
+  }
+});
+
+// GET /api/conversation/:id
+router.get("/:id", async (req, res) => {
+  try {
+    const conversation = await Conversation.findById(req.params.id);
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
+    res.status(200).json(conversation);
+  } catch (error) {
+    console.error("Error fetching conversation:", error);
+    res.status(500).json({ error: "Failed to fetch conversation" });
+  }
+});
+
+router.delete("/:id", async (req, res) => {
+  try {
+    await Conversation.findByIdAndDelete(req.params.id);
+    res.status(200).json({ message: "Deleted" });
+  } catch (e) {
+    res.status(500).json({ error: "Delete failed" });
+  }
+});
+
+// PUT /api/conversation/:id/rename
+router.put("/:id/rename", async (req, res) => {
+  try {
+    const { title } = req.body;
+    if (!title || title.trim().length === 0) {
+      return res.status(400).json({ error: "Title is required" });
+    }
+
+    const conversation = await Conversation.findById(req.params.id);
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
+
+    conversation.title = title.trim();
+    conversation.updatedAt = new Date();
+    await conversation.save();
+
+    console.log(`Renamed conversation ${req.params.id} → "${title}"`);
+    res.status(200).json({ message: "Renamed", conversation });
+  } catch (error) {
+    console.error("Rename error:", error);
+    res.status(500).json({ error: "Failed to rename" });
   }
 });
 

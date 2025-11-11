@@ -447,7 +447,7 @@ class _AddEditAddressPageState extends State<AddEditAddressPage> {
                   ),
                 ),
                 value: isDefault,
-                activeColor: const Color(0xFF2596BE),
+                activeThumbColor: const Color(0xFF2596BE),
                 onChanged: (val) => setState(() => isDefault = val),
               ),
             ),

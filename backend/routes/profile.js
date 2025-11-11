@@ -62,6 +62,17 @@ router.get("/preferences/:userId", async (req, res) => {
   }
 });
 
+// GET username by user ID
+router.get("/username/:userId", async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId).select("username");
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json({ username: user.username });
+  } catch (err) {
+    res.status(500).json({ message: "Error retrieving username" });
+  }
+});
+
 // CREATE or UPDATE user preferences
 router.post("/preferences/:userId", async (req, res) => {
   try {

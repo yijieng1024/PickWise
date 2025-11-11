@@ -20,6 +20,7 @@ dependencies:
   flex_color_scheme: ^8.3.0
   jwt_decoder: ^2.0.1
   carousel_slider: ^5.0.0
+  confetti: ^0.8.0
   
 dev_dependencies:
   flutter_test:

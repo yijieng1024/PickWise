@@ -507,16 +507,17 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                         onTap: () =>
                             Navigator.pushNamed(context, "/change-password"),
                       ),
+                      // Logout button
                       _buildOptionCard(
-                        icon: Icons.help_outline,
-                        label: "Help & Support",
-                        subtitle: "Get assistance",
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Help & Support coming soon!"),
-                            ),
-                          );
+                        icon: Icons.logout,
+                        label: "Logout",
+                        subtitle: "Sign out of account",
+                        onTap: () async {
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.remove("jwt_token");
+                          if (mounted) {
+                            Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+                          }
                         },
                       ),
                     ],
