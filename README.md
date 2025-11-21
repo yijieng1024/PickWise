@@ -45,47 +45,4 @@ PickWise/
 
 ## 🔧 Setup Instructions
 
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/yourusername/pickwise.git
-cd pickwise
-```
-
-### 2. Install Dependencies
-
-```bash
-flutter pub get
-```
-
-### 3. Setup Firebase
-
-* Add your **google-services.json** (Android) and **GoogleService-Info.plist** (iOS) inside respective folders.
-* Enable **Firebase Authentication** in the Firebase Console.
-
-### 4. Run the App
-
-```bash
-flutter run
-```
-
----
-
-## 🎯 Roadmap
-
-* [ ] Expand product categories beyond laptops
-* [ ] Implement user reviews and ratings
-* [ ] Add price-tracking and alerts
-* [ ] Enhance recommendation engine with ML fine-tuning
-
----
-
-## 👥 Contributing
-
-Contributions are welcome! Please fork this repo and submit a pull request with improvements.
-
----
-
-## 📜 License
-
-This project is licensed under the MIT License – see the LICENSE file for details.
+Stay Tuned
