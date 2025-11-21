@@ -4,7 +4,7 @@ const Cart = require("../models/Cart");
 const Laptop = require("../models/Laptop");
 const verifyToken = require("../middleware/verifyToken");
 
-// ✅ Add item to cart
+// Add item to cart
 router.post("/add", async (req, res) => {
   try {
     const { userId, laptopId, quantity } = req.body;
@@ -38,7 +38,7 @@ router.post("/add", async (req, res) => {
   }
 });
 
-// ✅ Get cart by user ID
+// Get cart by user ID
 router.get("/:userId", verifyToken, async (req, res) => {
   try {
     const cart = await Cart.findOne({ userId: req.params.userId }).populate("items.laptopId");
@@ -52,7 +52,7 @@ router.get("/:userId", verifyToken, async (req, res) => {
   }
 });
 
-// ❌ Remove item
+// Remove item
 router.delete("/remove/:userId/:laptopId", async (req, res) => {
   try {
     const { userId, laptopId } = req.params;
@@ -69,7 +69,7 @@ router.delete("/remove/:userId/:laptopId", async (req, res) => {
   }
 });
 
-// ✅ Clear cart after checkout
+// Clear cart after checkout
 router.delete("/clear/:userId", async (req, res) => {
   try {
     const { userId } = req.params;

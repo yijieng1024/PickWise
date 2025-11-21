@@ -23,59 +23,6 @@ const model = new ChatGoogleGenerativeAI({
   apiKey: process.env.GOOGLE_API_KEY,
 });
 
-// ------------------ VECTOR STORE ------------------
-let laptopVectorStore = null;
-let mongoClientSingleton = null;
-
-async function getMongoClient() {
-  if (mongoClientSingleton) return mongoClientSingleton;
-  const client = new MongoClient(MONGO_URL, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  });
-  await client.connect();
-  mongoClientSingleton = client;
-  return client;
-}
-
-async function initLaptopVectorStore() {
-  if (laptopVectorStore) return laptopVectorStore;
-
-  const client = await getMongoClient();
-  const collection = client.db(MONGO_DB).collection("laptops");
-
-  const embeddings = new GoogleGenerativeAIEmbeddings({
-    model: "text-embedding-004",
-    apiKey: process.env.GOOGLE_API_KEY,
-  });
-
-  laptopVectorStore = new MongoDBAtlasVectorSearch(embeddings, {
-    client,
-    collection,
-    indexName: "laptop_vector_index",
-    textKey: "pageContent",
-    embeddingKey: "embedding",
-  });
-
-  console.log("Vector store ready");
-  return laptopVectorStore;
-}
-
-// ------------------ SYNC ------------------
-async function syncLaptopEmbeddings(batchSize = 200) {
-  const store = await initLaptopVectorStore();
-  const total = await Laptop.countDocuments();
-  for (let skip = 0; skip < total; skip += batchSize) {
-    const docs = await Laptop.find({}).skip(skip).limit(batchSize).lean();
-    const documents = docs.map(d => ({
-      pageContent: `Name: ${d.product_name}\nBrand: ${d.brand}\nPrice: ${d.price_rm}\nCPU: ${d.processor_name}\nGPU: ${d.gpu_model}\nRAM: ${d.ram_gb}GB\nDisplay: ${d.display_size_inch}" ${d.display_resolution}`,
-      metadata: { product_id: d._id.toString() },
-    }));
-    if (documents.length) await store.addDocuments2121(documents);
-  }
-  console.log("Sync complete");
-}
-
 // ------------------ USER PREFERENCES ------------------
 async function getUserPreferences(userId) {
   try {
@@ -90,45 +37,80 @@ async function getUserPreferences(userId) {
   }
 }
 
-// ------------------ PROMPTS (NO { IN SYSTEM) ------------------
+// ------------------ PROMPTS (DOUBLE CURLIES = ESCAPED) ------------------
 const intentPrompt = ChatPromptTemplate.fromTemplate(`
-You are a JSON extractor. Return ONLY this JSON:
-{"intent_summary": "summary", "budget_min": null, "budget_max": null, "purpose": "", "brands": [], "must_have": [], "avoid": []}
-No extra text.
+You are a perfect JSON extractor. Return ONLY this exact JSON structure, no extra text, no markdown:
 
-History: {history}
-User: {query}
+{{"intent_summary": "short summary", "budget_min": number_or_null, "budget_max": number_or_null, "purpose": "", "brands": [], "must_have": [], "avoid": []}}
+
+History:
+{history}
+
+Current message: {query}
 `);
 
 const filterPrompt = ChatPromptTemplate.fromTemplate(`
-Return ONLY MongoDB filter JSON.
-Example: {"price_rm": {"$gte": 3000, "$lte": 4000}}}}}
+Return ONLY a valid MongoDB filter object as JSON. Examples:
+{{"price_rm": {{"$gte": 3000, "$lte": 8000}}}}
+or just {{}} if no filter.
 
-History: {history}
-User: {query}
-Intent: {intent}
+History:
+{history}
+
+Current message: {query}
+Intent JSON: {intent}
+
+Respond with pure JSON only.
 `);
 
 const recommendPrompt = ChatPromptTemplate.fromTemplate(`
-  You are Pico who is PickWise Assistant, a friendly tech-savvy laptop advisor who talks casually but professionally.
-Recommend 1-3 laptops:
-- Brand Model
-- RM price
-- CPU
-- GPU
-- RAM
-- Display
-- Pick Score: XX/100
+You are Pico, the friendly laptop advisor for PickWise.
 
-History: {history}
+Your goal is to recommend 1-3 laptops based on the user's needs.
+Data Provided: {laptops}
+
+**CRITICAL INSTRUCTION FOR LINKS:**
+1. If the user is just asking for recommendations, list the laptops with their details (Name, Price, Specs, Score). Do NOT provide purchase links yet.
+2. IF (and only if) the user explicitly expresses interest in a SPECIFIC laptop found in the data 
+(e.g., "I want to buy the Asus," "Show me the HP details," "Go with the first one"), you MUST append a navigation link for that specific laptop.
+3. The link format is: **[View Details: Product Name](app://laptop/ID)**
+4. Use the 'id' field from the laptop data to fill the ID section.
+
+History:
+{history}
+
 User: {query}
 Intent: {intent}
-Laptops: {laptops}
+
+Response (Be casual but professional):
 `);
 
-const intentChain = intentPrompt.pipe(model);
-const filterChain = filterPrompt.pipe(model);
+// ------------------ CHAINS (OLD STYLE – WORKS EVERYWHERE) ------------------
+const intentChain   = intentPrompt.pipe(model);
+const filterChain   = filterPrompt.pipe(model);
 const recommendChain = recommendPrompt.pipe(model);
+
+// ------------------ SUPER-ROBUST JSON PARSER ------------------
+function extractJson(text) {
+  if (!text) return {};
+  const cleaned = text
+    .replace(/```json/g, "")
+    .replace(/```/g, "")
+    .trim();
+
+  // Find the first { ... } block
+  const start = cleaned.indexOf("{");
+  const end   = cleaned.lastIndexOf("}");
+  if (start === -1 || end === -1) return {};
+
+  const jsonStr = cleaned.slice(start, end + 1);
+  try {
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    console.warn("JSON parse failed:", jsonStr);
+    return {};
+  }
+}
 
 // ------------------ HELPERS ------------------
 function safeLLMText(resp) {
@@ -150,75 +132,84 @@ function safeParseJson(str) {
 
 // ------------------ RETRIEVAL ------------------
 async function hybridRetrieval(userQuery, filter, intentJson) {
-  const candidates = new Map();
-  const add = (src, list) => list.forEach(l => l?._id && candidates.set(String(l._id), { ...l, _source: src }));
+  // Brand fallback (keep this — it's gold)
+  if (userQuery.match(/hp|h\.p\.|hewlett/i)) filter.brand = { $regex: /^hp$/i };
+  if (userQuery.match(/apple|macbook|mac/i)) filter.brand = "Apple";
 
-  // RAG
-  try {
-    const vecStore = await initLaptopVectorStore();
-    const retriever = vecStore.asRetriever({ k: 15 });
-    const docs = await retriever.invoke(userQuery);
-    const ids = docs.map(d => d.metadata?.product_id).filter(Boolean).map(id => new mongoose.Types.ObjectId(id));
-    if (ids.length) {
-      const found = await Laptop.find({ _id: { $in: ids } }).lean();
-      add("RAG", found);
-    }
-  } catch (e) { console.warn("RAG failed:", e.message); }
-
-  // Filter
+  // Apply budget & purpose
   const finalFilter = { ...filter };
   if (intentJson.budget_min) finalFilter.price_rm = { ...finalFilter.price_rm, $gte: intentJson.budget_min };
   if (intentJson.budget_max) finalFilter.price_rm = { ...finalFilter.price_rm, $lte: intentJson.budget_max };
   if (intentJson.purpose?.toLowerCase().includes("gaming")) {
-    finalFilter.gpu_benchmark = { ...finalFilter.gpu_benchmark, $gte: 8000 };
+    finalFilter.gpu_benchmark = { $gte: 8000 };
   }
 
-  try {
-    const list = await Laptop.find(finalFilter).limit(30).lean();
-    add("FILTER", list);
-  } catch (e) { console.warn("Filter failed:", e.message); }
+  let results = await Laptop.find(finalFilter).limit(30).lean();
 
-  let results = Array.from(candidates.values());
+  // Fallback if nothing found
   if (!results.length) {
-    results = await Laptop.find({ price_rm: { $gte: 3000, $lte: 4000 } }).limit(20).lean();
+    results = await Laptop.find({
+      price_rm: { $gte: 3000, $lte: 8000 }
+    }).limit(20).lean();
   }
+
   return results;
 }
 
 // ------------------ MAIN ------------------
 async function queryLaptopLLM(userId, userQuery, conversationId) {
   try {
-    // History
+    // History - Securely load only if conversation belongs to current user
     let historyMessages = [];
-    if (conversationId && mongoose.Types.ObjectId.isValid(conversationId)) {
-      const conv = await Conversation.findById(conversationId);
-      historyMessages = (conv?.messages || []).map(m =>
-        m.role === "user" ? new HumanMessage(m.content) : new AIMessage(m.content)
-      );
-    }
-    const historyStr = historyMessages.map(m => `${m._role}: ${m.content}`).join("\n");
+    let historyStr = "";
 
-    // 1. Intent
-    let intentJson = { intent_summary: userQuery, budget_min: null, budget_max: null, purpose: "" };
+    if (conversationId && mongoose.Types.ObjectId.isValid(conversationId)) {
+      try {
+        const conv = await Conversation.findOne({
+          _id: conversationId,
+          userId: userId   // This ensures only the owner's conversation is loaded
+        }).select("messages").lean(); // .lean() for performance
+
+        if (conv) {
+          historyMessages = (conv.messages || []).map(m =>
+            m.role === "user" 
+              ? new HumanMessage(m.content) 
+              : new AIMessage(m.content)
+          );
+
+          historyStr = historyMessages
+            .map(m => `${m._role === "human" ? "User" : "Assistant"}: ${m.content}`)
+            .join("\n");
+        }
+        // If conv is null → wrong user or deleted → just use empty history (safe)
+      } catch (err) {
+        console.warn("Failed to load conversation history:", err.message);
+        // Silently fail → don't break recommendation if history can't load
+      }
+    }
+
+        // 1. Intent
+    let intentJson = { intent_summary: userQuery, budget_min: null, budget_max: null, purpose: "", brands: [], must_have: [], avoid: [] };
     try {
       const resp = await intentChain.invoke({ history: historyStr, query: userQuery });
-      intentJson = safeParseJson(safeLLMText(resp));
-      if (!intentJson.budget_min && userQuery.match(/(\d{4})-(\d{4})/)) {
-        const [, min, max] = userQuery.match(/(\d{4})-(\d{4})/);
-        intentJson.budget_min = parseInt(min);
-        intentJson.budget_max = parseInt(max);
-      }
-      if (userQuery.toLowerCase().includes("gaming")) intentJson.purpose = "gaming";
-    } catch (e) { console.warn("Intent failed:", e.message); }
+      const text = resp?.content || resp?.text || String(resp);
+      intentJson = { ...intentJson, ...extractJson(text) };
+    } catch (e) {
+      console.warn("Intent chain failed:", e.message);
+    }
 
     // 2. Filter
     let filter = {};
     try {
-      const resp = await filterChain.invoke({ history: historyStr, query: userQuery, intent: JSON.stringify(intentJson) });
-      filter = safeParseJson(safeLLMText(resp));
+      const resp = await filterChain.invoke({ 
+        history: historyStr, 
+        query: userQuery, 
+        intent: JSON.stringify(intentJson) 
+      });
+      const text = resp?.content || resp?.text || String(resp);
+      filter = extractJson(text);
     } catch (e) {
-      console.warn("Filter failed:", e.message);
-      filter = { price_rm: { $gte: intentJson.budget_min || 0, $lte: intentJson.budget_max || 10000 } };
+      console.warn("Filter chain failed:", e.message);
     }
 
     // 3. Retrieve
@@ -232,7 +223,7 @@ async function queryLaptopLLM(userId, userQuery, conversationId) {
     const scored = await Promise.all(
       laptops.map(async l => {
         const score = await calculatePickScore(l, priorityFactors, brandPreferences);
-        return { ...l, pick_score: score };
+        return { ...l, pick_score: score};
       })
     );
   
@@ -240,6 +231,7 @@ async function queryLaptopLLM(userId, userQuery, conversationId) {
     const top = scored.slice(0, 3);
 
     const laptopInfo = top.map(l => ({
+      id: l._id.toString(),
       name: l.product_name,
       brand: l.brand,
       price: `RM ${l.price_rm}`,
@@ -263,25 +255,6 @@ async function queryLaptopLLM(userId, userQuery, conversationId) {
     } catch (e) {
       console.warn("Recommend failed:", e.message);
       responseText += "\n\n" + laptopInfo.map(l => `- ${l.brand} ${l.name}: ${l.price} (${l.pick_score})`).join("\n");
-    }
-
-    // --- Conditionally append clickable links based on user intent ---
-    const hasPurchaseIntent = /\b(buy|purchase|add to cart|get|want to buy|interested in|show me details|check out|view)\b/i.test(userQuery);
-    
-    if (hasPurchaseIntent) {
-      try {
-        const links = top.map(l => {
-          const id = l._id ? String(l._id) : (l._id?.toString ? l._id.toString() : null);
-          const title = `${l.brand || ''} ${l.product_name || l.name || ''}`.trim();
-          return id ? `- [${title}](app://laptop/${id})` : null;
-        }).filter(Boolean).join("\n");
-
-        if (links && links.length) {
-          responseText = responseText.trim() + "\n\n**View & Buy:**\n" + links;
-        }
-      } catch (linkErr) {
-        console.warn("Failed to append links:", linkErr);
-      }
     }
 
     // Save
@@ -315,6 +288,4 @@ async function queryLaptopLLM(userId, userQuery, conversationId) {
 // ------------------ EXPORTS ------------------
 module.exports = {
   queryLaptopLLM,
-  initLaptopVectorStore,
-  syncLaptopEmbeddings,
 };

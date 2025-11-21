@@ -44,6 +44,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
   double discount = 0;
   double totalPay = 0;
 
+  // LOADING STATE
+  bool isProcessingOrder = false;
+
   @override
   void initState() {
     super.initState();
@@ -161,23 +164,25 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   void calculateTotals() {
     double total = 0;
-    
+
     print('=== DEBUG: Calculate Totals ===');
     print('Selected Items Count: ${widget.selectedItems.length}');
-    
+
     for (var item in widget.selectedItems) {
       print('Item: $item');
-      
+
       final laptop = item['laptopId'];
       print('Laptop data: $laptop');
-      
+
       if (laptop != null) {
         // Try different possible field names for price
-        var priceValue = laptop['price_rm'] ?? laptop['price'] ?? laptop['Price_RM'];
-        print('Price value found: $priceValue (type: ${priceValue.runtimeType})');
-        
+        var priceValue =
+            laptop['price_rm'] ?? laptop['price'] ?? laptop['Price_RM'];
+        print(
+            'Price value found: $priceValue (type: ${priceValue.runtimeType})');
+
         double price = 0.0;
-        
+
         if (priceValue != null) {
           if (priceValue is num) {
             price = priceValue.toDouble();
@@ -188,16 +193,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
             price = double.tryParse(priceStr) ?? 0.0;
           }
         }
-        
+
         int qty = item['quantity'] ?? 1;
         print('Parsed price: $price, Quantity: $qty, Subtotal: ${price * qty}');
-        
+
         total += price * qty;
       } else {
         print('Laptop is null for this item');
       }
     }
-    
+
     print('Final total: $total');
     print('=== END DEBUG ===');
 
@@ -240,184 +245,208 @@ class _CheckoutPageState extends State<CheckoutPage> {
     });
   }
 
- Future<void> handleCheckout() async {
-  if (widget.selectedItems.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Please select at least one product")),
-    );
-    return;
-  }
-
-  if (selectedAddressId == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Please select a delivery address")),
-    );
-    return;
-  }
-
-  try {
-    // Step 1: Create Order
-    final orderId = await _createOrder();
-    
-    if (orderId == null) return;
-
-    // Step 2: Initiate Payment
-    final paymentId = await _initiatePayment(orderId);
-    
-    if (paymentId == null) return;
-
-    // Step 3: Navigate to appropriate payment page
-    final result = await _navigateToPaymentPage(paymentId);
-
-    if (result == true) {
-      // Payment successful - navigate to success page
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => OrderSuccessPage(orderId: orderId),
-        ),
+  Future<void> handleCheckout() async {
+    // 1. Basic Validation
+    if (widget.selectedItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select at least one product")),
       );
+      return;
     }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Error: $e"),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-}
 
-Future<String?> _createOrder() async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token');
-
-    print('=== Creating Order ===');
-    print('Token: ${token?.substring(0, 20)}...');
-    print('Address ID: $selectedAddressId');
-    print('Items: ${widget.selectedItems.length}');
-
-    final items = widget.selectedItems.map((item) {
-      print('Item: ${item['laptopId']['_id']} x ${item['quantity']}');
-      return {
-        'laptopId': item['laptopId']['_id'],
-        'quantity': item['quantity']
-      };
-    }).toList();
-
-    final orderData = {
-      'addressId': selectedAddressId,
-      'items': items,
-      'merchandiseSubtotal': merchandiseSubtotal,
-      'shippingFee': shippingFee,
-      'sstRate': sstRate,
-      'sstAmount': merchandiseSubtotal * sstRate,
-      'discount': discount,
-      'totalAmount': totalPay,
-      'deliveryOption': selectedDelivery,
-      'paymentMethod': selectedPayment,
-      'appliedVoucher': appliedVoucher,
-      'remark': remark,
-    };
-
-    print('Order Data: ${json.encode(orderData)}');
-
-    final response = await http.post(
-      Uri.parse('${ApiConstants.baseUrl}/api/order'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: json.encode(orderData),
-    ).timeout(const Duration(seconds: 15));
-
-    print('Response Status: ${response.statusCode}');
-    print('Response Body: ${response.body}');
-
-    if (response.statusCode == 201) {
-      final result = json.decode(response.body);
-      return result['order']['_id'];
-    } else {
-      final error = json.decode(response.body);
-      throw Exception(error['message'] ?? 'Failed to create order');
+    if (selectedAddressId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select a delivery address")),
+      );
+      return;
     }
-  } catch (e) {
-    print('Error creating order: $e');
-    _showError('Failed to create order: $e');
-    return null;
+
+    // 2. Start Loading
+    setState(() {
+      isProcessingOrder = true;
+    });
+
+    try {
+      // Step 1: Create Order
+      final orderId = await _createOrder();
+
+      if (orderId == null) {
+        // If creation failed, stop loading so user can retry
+        setState(() => isProcessingOrder = false);
+        return;
+      }
+
+      // Step 2: Initiate Payment
+      final paymentId = await _initiatePayment(orderId);
+
+      if (paymentId == null) {
+        // If payment init failed, stop loading
+        setState(() => isProcessingOrder = false);
+        return;
+      }
+
+      // Step 3: Navigate to appropriate payment page
+      final result = await _navigateToPaymentPage(paymentId);
+
+      // If user returns to this page (e.g., pressed back or payment cancelled)
+      if (mounted) {
+        setState(() => isProcessingOrder = false);
+      }
+
+      if (result == true) {
+        // Payment successful - navigate to success page
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => OrderSuccessPage(orderId: orderId),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => isProcessingOrder = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
-}
 
-Future<String?> _initiatePayment(String orderId) async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token');
+  Future<String?> _createOrder() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
 
-  print('=== Initiating Payment ===');
-  print('URL: ${ApiConstants.baseUrl}/api/payment/initiate');
-  print('Order ID: $orderId');
-  print('Payment Method: $selectedPayment');
+      print('=== Creating Order ===');
+      print('Token: ${token?.substring(0, 20)}...');
+      print('Address ID: $selectedAddressId');
+      print('Items: ${widget.selectedItems.length}');
 
-    final response = await http.post(
-      Uri.parse('${ApiConstants.baseUrl}/api/payment/initiate'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: json.encode({
-        'orderId': orderId,
+      final items = widget.selectedItems.map((item) {
+        print('Item: ${item['laptopId']['_id']} x ${item['quantity']}');
+        return {
+          'laptopId': item['laptopId']['_id'],
+          'quantity': item['quantity']
+        };
+      }).toList();
+
+      final orderData = {
+        'addressId': selectedAddressId,
+        'items': items,
+        'merchandiseSubtotal': merchandiseSubtotal,
+        'shippingFee': shippingFee,
+        'sstRate': sstRate,
+        'sstAmount': merchandiseSubtotal * sstRate,
+        'discount': discount,
+        'totalAmount': totalPay,
+        'deliveryOption': selectedDelivery,
         'paymentMethod': selectedPayment,
-      }),
-    ).timeout(const Duration(seconds: 10));
+        'appliedVoucher': appliedVoucher,
+        'remark': remark,
+      };
 
-    if (response.statusCode == 200) {
-      final result = json.decode(response.body);
-      return result['paymentId'];
-    } else {
-      throw Exception('Failed to initiate payment');
-    }
-  } catch (e) {
-    _showError('Failed to initiate payment: $e');
-    return null;
-  }
-}
+      print('Order Data: ${json.encode(orderData)}');
 
-Future<bool?> _navigateToPaymentPage(String paymentId) async {
-  Widget paymentPage;
+      final response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/api/order'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode(orderData),
+      ).timeout(const Duration(seconds: 15));
 
-  switch (selectedPayment) {
-    case 'Credit/Debit Card':
-      paymentPage = CardPaymentPage(
-        paymentId: paymentId,
-        amount: totalPay,
-      );
-      break;
-    case 'Online Banking':
-      paymentPage = OnlineBankingPage(
-        paymentId: paymentId,
-        amount: totalPay,
-      );
-      break;
-    case 'E-Wallet':
-      paymentPage = EWalletPaymentPage(
-        paymentId: paymentId,
-        amount: totalPay,
-      );
-      break;
-    default:
-      _showError('Invalid payment method');
+      print('Response Status: ${response.statusCode}');
+      print('Response Body: ${response.body}');
+
+      if (response.statusCode == 201) {
+        final result = json.decode(response.body);
+        return result['order']['_id'];
+      } else {
+        final error = json.decode(response.body);
+        throw Exception(error['message'] ?? 'Failed to create order');
+      }
+    } catch (e) {
+      print('Error creating order: $e');
+      _showError('Failed to create order: $e');
       return null;
+    }
   }
 
-  return await Navigator.push<bool>(
-    context,
-    MaterialPageRoute(builder: (context) => paymentPage),
-  );
-}
+  Future<String?> _initiatePayment(String orderId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+
+      print('=== Initiating Payment ===');
+      print('URL: ${ApiConstants.baseUrl}/api/payment/initiate');
+      print('Order ID: $orderId');
+      print('Payment Method: $selectedPayment');
+
+      final response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/api/payment/initiate'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({
+          'orderId': orderId,
+          'paymentMethod': selectedPayment,
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final result = json.decode(response.body);
+        return result['paymentId'];
+      } else {
+        throw Exception('Failed to initiate payment');
+      }
+    } catch (e) {
+      _showError('Failed to initiate payment: $e');
+      return null;
+    }
+  }
+
+  Future<bool?> _navigateToPaymentPage(String paymentId) async {
+    Widget paymentPage;
+
+    switch (selectedPayment) {
+      case 'Credit/Debit Card':
+        paymentPage = CardPaymentPage(
+          paymentId: paymentId,
+          amount: totalPay,
+        );
+        break;
+      case 'Online Banking':
+        paymentPage = OnlineBankingPage(
+          paymentId: paymentId,
+          amount: totalPay,
+        );
+        break;
+      case 'E-Wallet':
+        paymentPage = EWalletPaymentPage(
+          paymentId: paymentId,
+          amount: totalPay,
+        );
+        break;
+      default:
+        _showError('Invalid payment method');
+        return null;
+    }
+
+    return await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (context) => paymentPage),
+    );
+  }
 
   // UI HELPERS
-  Widget _buildSectionCard({required String title, required Widget child, IconData? icon}) {
+  Widget _buildSectionCard(
+      {required String title, required Widget child, IconData? icon}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -495,7 +524,8 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
                         size: 32,
                       ),
                     )
-                  : const Icon(Icons.laptop_mac, color: Color(0xFF00897B), size: 32),
+                  : const Icon(Icons.laptop_mac,
+                      color: Color(0xFF00897B), size: 32),
             ),
           ),
           const SizedBox(width: 16),
@@ -543,7 +573,7 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
 
   Widget _buildAddAddressPrompt() {
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, '/address_book'),
+      onTap: () => Navigator.pushNamed(context, '/addressBook'),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -561,7 +591,8 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
                 children: [
                   Text(
                     "No address saved",
-                    style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFE65100)),
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600, color: Color(0xFFE65100)),
                   ),
                   Text(
                     "Tap to add a delivery address",
@@ -615,14 +646,16 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
                       if (addr['isDefault'] == true)
                         Container(
                           margin: const EdgeInsets.only(left: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
                             color: const Color(0xFFB2DFDB),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: const Text(
                             "Default",
-                            style: TextStyle(fontSize: 10, color: Colors.black87),
+                            style:
+                                TextStyle(fontSize: 10, color: Colors.black87),
                           ),
                         ),
                     ],
@@ -654,7 +687,7 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
                           child: Text(
                             addr['fullName'] ?? 'No Name',
                             style: const TextStyle(
-                              fontWeight: FontWeight.bold, 
+                              fontWeight: FontWeight.bold,
                               fontSize: 15,
                               color: Color(0xFF263238),
                             ),
@@ -662,14 +695,16 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
                         ),
                         if (addr['isDefault'] == true)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
                               color: const Color(0xFFB2DFDB),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: const Text(
                               "Default",
-                              style: TextStyle(fontSize: 10, color: Colors.black87),
+                              style: TextStyle(
+                                  fontSize: 10, color: Colors.black87),
                             ),
                           ),
                       ],
@@ -697,7 +732,8 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
     );
   }
 
-  Widget _summaryRow(String title, String value, {bool isBold = false, Color? color}) {
+  Widget _summaryRow(String title, String value,
+      {bool isBold = false, Color? color}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -729,7 +765,8 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text("Checkout", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+        title: const Text("Checkout",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
         backgroundColor: const Color(0xFFB2DFDB),
         foregroundColor: Colors.black,
         centerTitle: true,
@@ -758,7 +795,9 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
                   title: "Order Items",
                   icon: Icons.shopping_bag,
                   child: Column(
-                    children: widget.selectedItems.map((item) => _buildProductCard(item)).toList(),
+                    children: widget.selectedItems
+                        .map((item) => _buildProductCard(item))
+                        .toList(),
                   ),
                 ),
 
@@ -779,7 +818,8 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide.none,
                             ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 14),
                           ),
                         ),
                       ),
@@ -789,11 +829,14 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF00897B),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
                           elevation: 0,
                         ),
-                        child: const Text("Apply", style: TextStyle(fontWeight: FontWeight.bold)),
+                        child: const Text("Apply",
+                            style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
@@ -816,15 +859,21 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(vertical: 8),
                       ),
-                      icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF00897B)),
+                      icon: const Icon(Icons.keyboard_arrow_down,
+                          color: Color(0xFF00897B)),
                       items: const [
-                        DropdownMenuItem(value: "Standard Delivery", child: Text("Standard Delivery (3-5 days)")),
-                        DropdownMenuItem(value: "Express Delivery", child: Text("Express Delivery (1-2 days)")),
+                        DropdownMenuItem(
+                            value: "Standard Delivery",
+                            child: Text("Standard Delivery (3-5 days)")),
+                        DropdownMenuItem(
+                            value: "Express Delivery",
+                            child: Text("Express Delivery (1-2 days)")),
                       ],
                       onChanged: (value) {
                         setState(() {
                           selectedDelivery = value!;
-                          shippingFee = (value == "Express Delivery") ? 10.00 : 5.00;
+                          shippingFee =
+                              (value == "Express Delivery") ? 10.00 : 5.00;
                           _recalculateTotal();
                         });
                       },
@@ -849,14 +898,18 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(vertical: 8),
                       ),
-                      icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF00897B)),
+                      icon: const Icon(Icons.keyboard_arrow_down,
+                          color: Color(0xFF00897B)),
                       items: const [
-                        DropdownMenuItem(value: "Online Banking", child: Text("Online Banking")),
+                        DropdownMenuItem(
+                            value: "Online Banking",
+                            child: Text("Online Banking")),
                         // N/A
                         //DropdownMenuItem(value: "Credit/Debit Card", child: Text("Credit/Debit Card")),
                         //DropdownMenuItem(value: "E-Wallet", child: Text("E-Wallet (Touch 'n Go, GrabPay)")),
                       ],
-                      onChanged: (value) => setState(() => selectedPayment = value!),
+                      onChanged: (value) =>
+                          setState(() => selectedPayment = value!),
                     ),
                   ),
                 ),
@@ -867,11 +920,16 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
                   icon: Icons.receipt_long,
                   child: Column(
                     children: [
-                      _summaryRow("Merchandise Subtotal", "RM ${merchandiseSubtotal.toStringAsFixed(2)}"),
-                      _summaryRow("Shipping Fee", "RM ${shippingFee.toStringAsFixed(2)}"),
-                      _summaryRow("SST (6%)", "RM ${(merchandiseSubtotal * sstRate).toStringAsFixed(2)}"),
+                      _summaryRow("Merchandise Subtotal",
+                          "RM ${merchandiseSubtotal.toStringAsFixed(2)}"),
+                      _summaryRow("Shipping Fee",
+                          "RM ${shippingFee.toStringAsFixed(2)}"),
+                      _summaryRow("SST (6%)",
+                          "RM ${(merchandiseSubtotal * sstRate).toStringAsFixed(2)}"),
                       if (discount > 0)
-                        _summaryRow("Discount", "- RM ${discount.toStringAsFixed(2)}", color: Colors.green),
+                        _summaryRow("Discount",
+                            "- RM ${discount.toStringAsFixed(2)}",
+                            color: Colors.green),
                       const Divider(height: 24, thickness: 1.5),
                       _summaryRow(
                         "Total Payment",
@@ -898,30 +956,47 @@ Future<bool?> _navigateToPaymentPage(String paymentId) async {
               decoration: BoxDecoration(
                 color: Colors.white,
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -2)),
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, -2)),
                 ],
               ),
               child: SafeArea(
                 child: ElevatedButton(
-                  onPressed: handleCheckout,
+                  onPressed: isProcessingOrder ? null : handleCheckout,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00897B),
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor:
+                        const Color(0xFF00897B).withOpacity(0.7),
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     elevation: 2,
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.check_circle, size: 22),
-                      const SizedBox(width: 8),
-                      Text(
-                        "Place Order • RM ${totalPay.toStringAsFixed(2)}",
-                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
+                  child: isProcessingOrder
+                      ? const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                            strokeWidth: 2.5,
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.check_circle, size: 22),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Place Order • RM ${totalPay.toStringAsFixed(2)}",
+                              style: const TextStyle(
+                                  fontSize: 17, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
                 ),
               ),
             ),

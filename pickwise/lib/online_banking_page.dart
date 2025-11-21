@@ -22,26 +22,62 @@ class OnlineBankingPage extends StatefulWidget {
 
 class _OnlineBankingPageState extends State<OnlineBankingPage> {
   final _formKey = GlobalKey<FormState>();
-  
+
   String? _selectedBank;
   final TextEditingController _accountNumberController = TextEditingController();
   final TextEditingController _accountHolderController = TextEditingController();
   final TextEditingController _pinController = TextEditingController();
-  
+
   bool _isProcessing = false;
   bool _showPinInput = false;
+  bool _isLoadingToken = true; // To show loading until token is fetched
+  String? _token;
 
   final List<Map<String, dynamic>> _banks = [
-    {'name': 'Maybank', 'icon': '🏦', 'color': Color(0xFFFFD700)},
-    {'name': 'CIMB Bank', 'icon': '🏦', 'color': Color(0xFFDC143C)},
-    {'name': 'Public Bank', 'icon': '🏦', 'color': Color(0xFFDC143C)},
-    {'name': 'RHB Bank', 'icon': '🏦', 'color': Color(0xFF003DA5)},
-    {'name': 'Hong Leong Bank', 'icon': '🏦', 'color': Color(0xFF0066CC)},
-    {'name': 'AmBank', 'icon': '🏦', 'color': Color(0xFFE31837)},
-    {'name': 'Bank Islam', 'icon': '🏦', 'color': Color(0xFF00A651)},
-    {'name': 'OCBC Bank', 'icon': '🏦', 'color': Color(0xFFED1C24)},
-    {'name': 'UOB Bank', 'icon': '🏦', 'color': Color(0xFF0F2C6F)},
+    {'name': 'Maybank', 'color': const Color(0xFFFFD700)},
+    {'name': 'CIMB Bank', 'color': const Color(0xFFDC143C)},
+    {'name': 'Public Bank', 'color': const Color(0xFFDC143C)},
+    {'name': 'RHB Bank', 'color': const Color(0xFF003DA5)},
+    {'name': 'Hong Leong Bank', 'color': const Color(0xFF0066CC)},
+    {'name': 'AmBank', 'color': const Color(0xFFE31837)},
+    {'name': 'Bank Islam', 'color': const Color(0xFF00A651)},
+    {'name': 'OCBC Bank', 'color': const Color(0xFFED1C24)},
+    {'name': 'UOB Bank', 'color': const Color(0xFF0F2C6F)},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadToken();
+  }
+
+  Future<void> _loadToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token'); // Change key if you used 'auth_token'
+
+    if (token == null || token.isEmpty) {
+      _showErrorAndRedirect('Session expired. Please login again.');
+      return;
+    }
+
+    setState(() {
+      _token = token;
+      _isLoadingToken = false;
+    });
+  }
+
+  void _showErrorAndRedirect(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+
+    // Redirect to login after a delay
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -53,7 +89,6 @@ class _OnlineBankingPageState extends State<OnlineBankingPage> {
 
   Future<void> _proceedToLogin() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _showPinInput = true);
   }
 
@@ -65,92 +100,101 @@ class _OnlineBankingPageState extends State<OnlineBankingPage> {
       return;
     }
 
+    if (_token == null) {
+      _showErrorAndRedirect('Authentication failed. Please login again.');
+      return;
+    }
+
     setState(() => _isProcessing = true);
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('jwt_token');
-
-      // Show simulated bank authentication
+      // Simulate bank authentication
       await _showBankAuthenticationDialog();
 
       final response = await http.post(
         Uri.parse('${ApiConstants.baseUrl}/api/payment/online-banking'),
         headers: {
-          'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer $_token',
           'Content-Type': 'application/json',
         },
         body: json.encode({
           'paymentId': widget.paymentId,
           'bankName': _selectedBank,
-          'accountNumber': _accountNumberController.text,
-          'accountHolderName': _accountHolderController.text,
+          'accountNumber': _accountNumberController.text.trim(),
+          'accountHolderName': _accountHolderController.text.trim(),
           'pin': _pinController.text,
         }),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 15));
 
       final result = json.decode(response.body);
 
       if (response.statusCode == 200 && result['success'] == true) {
-        _showSuccessDialog(result['transactionId'], result['fpxTransactionId']);
+        _showSuccessDialog(
+          result['transactionId'] ?? 'N/A',
+          result['fpxTransactionId'] ?? 'N/A',
+        );
       } else {
-        _showErrorDialog(result['message'] ?? 'Payment failed');
+        _showErrorDialog(result['message'] ?? 'Payment failed. Please try again.');
       }
+    } on TimeoutException {
+      _showErrorDialog('Connection timeout. Please check your internet and try again.');
     } catch (e) {
-      _showErrorDialog('Payment processing failed: $e');
+      if (e.toString().contains('401')) {
+        _handleUnauthorized();
+      } else {
+        _showErrorDialog('Payment failed: $e');
+      }
     } finally {
-      setState(() => _isProcessing = false);
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
     }
   }
 
-Future<void> _showBankAuthenticationDialog() async {
-  // Use a Completer to control when the future ends
-  final completer = Completer<void>();
+  void _handleUnauthorized() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('jwt_token');
 
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext dialogContext) {
-      // Auto-dismiss after 3 seconds
-      Future.delayed(const Duration(seconds: 3), () {
-        if (!completer.isCompleted) {
-          // Only pop if dialog is still open
+    _showErrorAndRedirect('Session expired. Logging you out...');
+  }
+
+  Future<void> _showBankAuthenticationDialog() async {
+    final completer = Completer<void>();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        Future.delayed(const Duration(seconds: 3), () {
           if (Navigator.of(dialogContext).canPop()) {
             Navigator.of(dialogContext).pop();
           }
-          completer.complete();
-        }
-      });
+          if (!completer.isCompleted) completer.complete();
+        });
 
-      return AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Column(
-          children: [
-            const Icon(Icons.account_balance, size: 48, color: Color(0xFF00897B)),
-            const SizedBox(height: 8),
-            Text('Authenticating with $_selectedBank'),
-          ],
-        ),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Please wait while we connect to your bank...'),
-          ],
-        ),
-      );
-    },
-  ).then((_) {
-    // Ensure completer finishes even if dialog is popped manually
-    if (!completer.isCompleted) {
-      completer.complete();
-    }
-  });
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Column(
+            children: [
+              const Icon(Icons.account_balance, size: 48, color: Color(0xFF00897B)),
+              const SizedBox(height: 8),
+              Text('Connecting to $_selectedBank'),
+            ],
+          ),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: Color(0xFF00897B)),
+              SizedBox(height: 16),
+              Text('Securely authenticating...'),
+            ],
+          ),
+        );
+      },
+    ).then((_) => completer.complete());
 
-  // Wait for either auto-dismiss or manual close
-  return completer.future;
-}
+    return completer.future;
+  }
 
   void _showSuccessDialog(String transactionId, String fpxId) {
     showDialog(
@@ -169,7 +213,7 @@ Future<void> _showBankAuthenticationDialog() async {
               child: const Icon(Icons.check_circle, color: Colors.green, size: 48),
             ),
             const SizedBox(height: 16),
-            const Text('Payment Successful!'),
+            const Text('Payment Successful!', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
         content: Column(
@@ -179,17 +223,16 @@ Future<void> _showBankAuthenticationDialog() async {
             Text('Bank: $_selectedBank'),
             const SizedBox(height: 8),
             Text('Transaction ID: $transactionId'),
-            const SizedBox(height: 4),
-            Text('FPX Ref: $fpxId', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+            Text('FPx Ref: $fpxId', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
             const SizedBox(height: 8),
-            Text('Amount: RM ${widget.amount.toStringAsFixed(2)}'),
+            Text('Amount: RM ${widget.amount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
         actions: [
           ElevatedButton(
             onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pop(true);
+              Navigator.of(context).pop(); // Close dialog
+              Navigator.of(context).pop(true); // Return success to previous screen
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF00897B),
@@ -218,7 +261,7 @@ Future<void> _showBankAuthenticationDialog() async {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.of(context).pop();
+              Navigator.pop(context);
               setState(() {
                 _showPinInput = false;
                 _pinController.clear();
@@ -233,12 +276,22 @@ Future<void> _showBankAuthenticationDialog() async {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingToken) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF8F9FA),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF00897B)),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: const Text('Online Banking'),
         backgroundColor: const Color(0xFFB2DFDB),
         foregroundColor: Colors.black,
+        elevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -247,37 +300,26 @@ Future<void> _showBankAuthenticationDialog() async {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Amount Display
+              // Total Amount Card
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF00897B), Color(0xFF00897B).withOpacity(0.7)],
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF00897B), Color(0xFF00695C)],
                   ),
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
+                    BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
                   ],
                 ),
                 child: Column(
                   children: [
-                    const Text(
-                      'Total Amount',
-                      style: TextStyle(color: Colors.white70, fontSize: 14),
-                    ),
+                    const Text('Total Payable', style: TextStyle(color: Colors.white70)),
                     const SizedBox(height: 8),
                     Text(
                       'RM ${widget.amount.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -286,104 +328,55 @@ Future<void> _showBankAuthenticationDialog() async {
               const SizedBox(height: 32),
 
               if (!_showPinInput) ...[
-                // Select Bank
-                const Text(
-                  'Select Your Bank',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                ),
+                const Text('Select Bank', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 12),
                 Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
                   child: Column(
-                    children: _banks.map((bank) {
-                      return RadioListTile<String>(
-                        value: bank['name'],
-                        groupValue: _selectedBank,
-                        onChanged: (value) => setState(() => _selectedBank = value),
-                        title: Row(
-                          children: [
-                            Text(bank['icon'], style: const TextStyle(fontSize: 24)),
-                            const SizedBox(width: 12),
-                            Text(bank['name']),
-                          ],
-                        ),
-                        activeColor: const Color(0xFF00897B),
-                      );
-                    }).toList(),
+                    children: _banks.map((bank) => RadioListTile<String>(
+                      value: bank['name'],
+                      groupValue: _selectedBank,
+                      activeColor: const Color(0xFF00897B),
+                      onChanged: (val) => setState(() => _selectedBank = val),
+                      title: Row(children: [const SizedBox(width: 12), Text(bank['name'])]),
+                    )).toList(),
                   ),
                 ),
 
                 const SizedBox(height: 24),
-
-                // Account Number
-                const Text(
-                  'Account Number',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                ),
+                const Text('Account Number', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _accountNumberController,
                   keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(16),
-                  ],
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(16)],
                   decoration: InputDecoration(
-                    hintText: 'Enter your account number',
-                    prefixIcon: const Icon(Icons.account_balance_wallet),
+                    hintText: 'e.g. 123456789012',
+                    prefixIcon: const Icon(Icons.credit_card),
                     filled: true,
                     fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter account number';
-                    }
-                    if (value.length < 10) {
-                      return 'Invalid account number';
-                    }
-                    return null;
-                  },
+                  validator: (v) => v!.isEmpty || v.length < 10 ? 'Enter valid account number' : null,
                 ),
 
                 const SizedBox(height: 20),
-
-                // Account Holder Name
-                const Text(
-                  'Account Holder Name',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                ),
+                const Text('Account Holder Name', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _accountHolderController,
                   textCapitalization: TextCapitalization.words,
                   decoration: InputDecoration(
-                    hintText: 'As per bank records',
+                    hintText: 'As shown in bank statement',
                     prefixIcon: const Icon(Icons.person),
                     filled: true,
                     fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter account holder name';
-                    }
-                    return null;
-                  },
+                  validator: (v) => v!.isEmpty ? 'Required' : null,
                 ),
 
                 const SizedBox(height: 32),
-
-                // Proceed Button
                 SizedBox(
                   width: double.infinity,
                   height: 56,
@@ -392,135 +385,53 @@ Future<void> _showBankAuthenticationDialog() async {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF00897B),
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 2,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text(
-                      'Proceed to Login',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
+                    child: const Text('Proceed to Login', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ] else ...[
-                // PIN Input Screen
+                // PIN Screen
                 Container(
                   padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                      ),
-                    ],
-                  ),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)]),
                   child: Column(
                     children: [
-                      Icon(
-                        Icons.account_balance,
-                        size: 64,
-                        color: _banks.firstWhere((b) => b['name'] == _selectedBank)['color'],
-                      ),
+                      Icon(Icons.account_balance, size: 64, color: _banks.firstWhere((b) => b['name'] == _selectedBank)['color']),
                       const SizedBox(height: 16),
-                      Text(
-                        _selectedBank!,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Account: ${_accountNumberController.text}',
-                        style: TextStyle(color: Colors.grey[600]),
-                      ),
-                      const SizedBox(height: 24),
-                      const Text(
-                        'Enter Your 6-Digit PIN',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      Text(_selectedBank!, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                      Text('•••• ${_accountNumberController.text.substring(_accountNumberController.text.length - 4)}', style: TextStyle(color: Colors.grey[600])),
+                      const SizedBox(height: 32),
+                      const Text('Enter 6-Digit PIN', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 16),
                       TextField(
                         controller: _pinController,
-                        keyboardType: TextInputType.number,
                         obscureText: true,
+                        keyboardType: TextInputType.number,
                         textAlign: TextAlign.center,
                         maxLength: 6,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(6),
-                        ],
-                        style: const TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 16,
-                        ),
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        style: const TextStyle(fontSize: 32, letterSpacing: 12, fontWeight: FontWeight.bold),
                         decoration: InputDecoration(
                           counterText: '',
                           filled: true,
-                          fillColor: const Color(0xFFF5F5F5),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
+                          fillColor: const Color(0xFFF0F0F0),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                         ),
                       ),
                       const SizedBox(height: 24),
                       Row(
                         children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () {
-                                setState(() {
-                                  _showPinInput = false;
-                                  _pinController.clear();
-                                });
-                              },
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: const Text('Back'),
-                            ),
-                          ),
+                          Expanded(child: OutlinedButton(onPressed: () => setState(() => _showPinInput = false), child: const Text('Back', style: TextStyle(color: Colors.black)))),
                           const SizedBox(width: 12),
                           Expanded(
                             flex: 2,
                             child: ElevatedButton(
                               onPressed: _isProcessing ? null : _processPayment,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF00897B),
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: 2,
-                              ),
+                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00897B), padding: const EdgeInsets.symmetric(vertical: 18)),
                               child: _isProcessing
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Text(
-                                      'Confirm Payment',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
+                                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                  : const Text('Confirm Payment', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                             ),
                           ),
                         ],
@@ -531,24 +442,14 @@ Future<void> _showBankAuthenticationDialog() async {
               ],
 
               const SizedBox(height: 24),
-
-              // Security Info
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
+                decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(12)),
+                child: const Row(
                   children: [
-                    const Icon(Icons.info_outline, color: Colors.blue),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'You will be redirected to your bank\'s secure page for authentication.',
-                        style: TextStyle(color: Colors.blue.shade900, fontSize: 13),
-                      ),
-                    ),
+                    Icon(Icons.shield, color: Colors.blue),
+                    SizedBox(width: 12),
+                    Expanded(child: Text('Your transaction is secured and encrypted.', style: TextStyle(color: Colors.blue, fontSize: 13))),
                   ],
                 ),
               ),

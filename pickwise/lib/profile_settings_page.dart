@@ -488,7 +488,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                             context,
                             MaterialPageRoute(
                               builder: (context) =>
-                                  AddressBookPage(token: _token!),
+                                  AddressBookPage(),
                             ),
                           );
                         },

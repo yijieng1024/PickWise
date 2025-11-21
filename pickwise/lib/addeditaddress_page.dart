@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'api_constants.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AddEditAddressPage extends StatefulWidget {
   final Map<String, dynamic>? address;
@@ -66,72 +67,80 @@ class _AddEditAddressPageState extends State<AddEditAddressPage> {
   }
 
   Future<void> saveAddress() async {
-    if (!_formKey.currentState!.validate()) return;
+  if (!_formKey.currentState!.validate()) return;
+  if (!mounted) return;
+
+  setState(() => _isLoading = true);
+
+  // 🔥 Load token from SharedPreferences instead of widget.token
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('jwt_token');
+
+  if (token == null) {
+    _showSnackBar('Session expired. Please log in again.', Colors.red);
+    if (mounted) Navigator.pushReplacementNamed(context, '/login');
+    return;
+  }
+
+  final body = json.encode({
+    'fullName': fullNameController.text.trim(),
+    'phoneNumber': phoneController.text.trim(),
+    'addressLine1': line1Controller.text.trim(),
+    'addressLine2': line2Controller.text.trim(),
+    'city': cityController.text.trim(),
+    'state': stateController.text.trim(),
+    'postalCode': postalController.text.trim(),
+    'country': countryController.text.trim(),
+    'isDefault': isDefault,
+  });
+
+  final isEdit = widget.address != null;
+  final url = isEdit
+      ? Uri.parse('${ApiConstants.baseUrl}/address/${widget.address!['_id']}')
+      : Uri.parse('${ApiConstants.baseUrl}/address');
+
+  try {
+    final response = await (isEdit
+        ? http.put(
+            url,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: body,
+          )
+        : http.post(
+            url,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: body,
+          ));
 
     if (!mounted) return;
 
-    setState(() => _isLoading = true);
-
-    final body = json.encode({
-      'fullName': fullNameController.text.trim(),
-      'phoneNumber': phoneController.text.trim(),
-      'addressLine1': line1Controller.text.trim(),
-      'addressLine2': line2Controller.text.trim(),
-      'city': cityController.text.trim(),
-      'state': stateController.text.trim(),
-      'postalCode': postalController.text.trim(),
-      'country': countryController.text.trim(),
-      'isDefault': isDefault,
-    });
-
-    final isEdit = widget.address != null;
-    final url = isEdit
-        ? Uri.parse('${ApiConstants.baseUrl}/address/${widget.address!['_id']}')
-        : Uri.parse('${ApiConstants.baseUrl}/address');
-
-    try {
-      final response = await (isEdit
-          ? http.put(
-              url,
-              headers: {
-                'Authorization': 'Bearer ${widget.token}',
-                'Content-Type': 'application/json',
-              },
-              body: body,
-            )
-          : http.post(
-              url,
-              headers: {
-                'Authorization': 'Bearer ${widget.token}',
-                'Content-Type': 'application/json',
-              },
-              body: body,
-            ));
-
-      if (!mounted) return;
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        _showSnackBar(
-          isEdit ? '✓ Address updated successfully' : '✓ Address added successfully',
-          Colors.green,
-        );
-        await Future.delayed(const Duration(milliseconds: 500));
-        if (mounted) {
-          Navigator.pop(context, true);
-        }
-      } else {
-        _showSnackBar('Failed to save address: ${response.statusCode}', Colors.red);
-      }
-    } catch (e) {
-      if (mounted) {
-        _showSnackBar('Network error. Please try again.', Colors.red);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      _showSnackBar(
+        isEdit ? '✓ Address updated successfully' : '✓ Address added successfully',
+        Colors.green,
+      );
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) Navigator.pop(context, true);
+    } else {
+      _showSnackBar('Failed to save address: ${response.statusCode}', Colors.red);
+    }
+  } catch (e) {
+    if (mounted) {
+      _showSnackBar('Network error. Please try again.', Colors.red);
+    }
+  } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
+}
+
 
   void _showSnackBar(String message, Color backgroundColor) {
     ScaffoldMessenger.of(context).showSnackBar(

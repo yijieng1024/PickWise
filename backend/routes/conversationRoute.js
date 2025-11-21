@@ -124,6 +124,7 @@ async function generateTitle(messageContent) {
   }
 }
 
+// send message to LLM and get response
 router.post("/send", async (req, res) => {
   try {
     const { message, conversationId, userId } = req.body;
@@ -135,6 +136,7 @@ router.post("/send", async (req, res) => {
   }
 });
 
+// add message to conversation record
 router.post("/:id/add-message", async (req, res) => {
   try {
     const { message } = req.body;
@@ -152,6 +154,7 @@ router.post("/:id/add-message", async (req, res) => {
   }
 });
 
+// get list of conversations for a user
 router.get("/list", async (req, res) => {
   try {
     const { userId } = req.query;
@@ -169,7 +172,7 @@ router.get("/list", async (req, res) => {
   }
 });
 
-// GET /api/conversation/:id
+// get conversation by id
 router.get("/:id", async (req, res) => {
   try {
     const conversation = await Conversation.findById(req.params.id);
@@ -183,6 +186,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+// delete conversation
 router.delete("/:id", async (req, res) => {
   try {
     await Conversation.findByIdAndDelete(req.params.id);
@@ -192,7 +196,7 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// PUT /api/conversation/:id/rename
+// rename conversation
 router.put("/:id/rename", async (req, res) => {
   try {
     const { title } = req.body;

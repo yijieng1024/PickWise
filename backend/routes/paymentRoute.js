@@ -5,10 +5,12 @@ const Order = require('../models/Order');
 const verifyToken = require('../middleware/verifyToken');
 const User = require('../models/User');
 const { sendPaymentOTP } = require('../utils/emailService');
+const mongoose = require('mongoose');
 
 router.use(verifyToken);
 
 router.post('/initiate', async (req, res) => {
+  // await mongoose.connection.db.collection('payments').dropIndex('eWallet.transactionId_1');
   try {
     const userId = req.user.id;
     const { orderId, paymentMethod } = req.body;
@@ -19,8 +21,11 @@ router.post('/initiate', async (req, res) => {
     console.log('Payment Method:', paymentMethod);
 
     // 1. Validate order
-    const order = await Order.findOne({ _id: orderId, userId });
-    if (!order) return res.status(404).json({ message: 'Order not found' });
+const order = await Order.findOne({ _id: orderId, userId });
+if (!order) {
+  console.log('Order not found for ID:', orderId, 'User:', userId);
+  return res.status(404).json({ message: 'Order not found or access denied' });
+}
 
     if (order.paymentStatus === 'Paid')
       return res.status(400).json({ message: 'Order already paid' });

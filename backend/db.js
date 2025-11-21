@@ -6,7 +6,6 @@ async function connectDB() {
     await mongoose.connect(process.env.MONGO_URL);
     console.log("✅ MongoDB connected:", mongoose.connection.host);
     
-    // 可选：监听连接事件，更robust
     mongoose.connection.on("connected", () => {
       console.log("🔗 Mongoose connected to MongoDB");
     });

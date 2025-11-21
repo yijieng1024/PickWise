@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { generatePickScore } = require("../utils/PickScoreEngine");
 
-// POST /api/pickscore
+// calculate Pick_Score for a list of laptops for a user
 router.post("/pickscore", async (req, res) => {
   try {
     const { userId, laptops } = req.body;

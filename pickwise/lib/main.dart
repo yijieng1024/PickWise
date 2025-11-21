@@ -73,7 +73,7 @@ class MyApp extends StatelessWidget {
         '/profile': (context) => ProfileSettingsPage(),
         '/user-preference': (context) => UserPreferenceProfilePage(),
         '/chatbot': (context) => const ChatbotPage(userName: '', userId: ''),
-        '/addressBook': (context) => const AddressBookPage(token: ''),
+        '/addressBook': (context) => const AddressBookPage(),
         '/cart': (context) => const CartPage(),
         '/orders': (context) => const OrderHistoryPage(),
       },

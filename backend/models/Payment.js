@@ -84,7 +84,8 @@ const onlineBankingSchema = new mongoose.Schema({
   transactionId: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    sparse: true
   },
   fpxTransactionId: String, // FPX reference ID
   authenticationTime: Date
@@ -111,7 +112,8 @@ const eWalletSchema = new mongoose.Schema({
   transactionId: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    sparse: true
   },
   walletTransactionRef: String,
   authenticationTime: Date
